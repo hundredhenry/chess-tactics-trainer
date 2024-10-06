@@ -47,9 +47,7 @@ class ChessGame:
 
     # Draw the chess board and pieces
     def draw(self):
-        piece_symbols = {
-            'P': 'wp', 'p': 'bp', 'R': 'wr', 'r': 'br', 'N': 'wn', 'n': 'bn',
-            'B': 'wb', 'b': 'bb', 'Q': 'wq', 'q': 'bq', 'K': 'wk', 'k': 'bk'}
+        
 
         for row in range(8):
             for col in range(8):
