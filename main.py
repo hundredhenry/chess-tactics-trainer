@@ -93,7 +93,7 @@ class ChessGame:
     # Main game loop
     def run(self):
         running = True
-        self.draw()
+        self.self.draw
 
         while running:
             # Limit the frame rate to 60 FPS
