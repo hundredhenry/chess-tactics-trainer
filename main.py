@@ -8,11 +8,12 @@ pygame.init()
 
 class ChessGame:
     def __init__(self):
-        self.width, self.height = 800, 800
-        self.square_size, self.offset_x, self.offset_y = 100, 0, 0
+        self.width, self.height = 1000, 1000
+        self.square_size, self.offset_x, self.offset_y = 125, 0, 0
         self.window = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
-        self.colours = [pygame.Color(184, 139, 74), pygame.Color(227, 193, 111)]
-        self.highlight_colours = [pygame.Color(129, 150, 105), pygame.Color(129, 150, 105)]
+        self.colours = (pygame.Color(181, 136, 99), pygame.Color(240, 217, 181))
+        self.highlight_colours = (pygame.Color(100, 109, 64), pygame.Color(129, 150, 105))
+        self.last_move_colours = (pygame.Color(171, 162, 58), pygame.Color(206, 210, 107))
         self.piece_symbols = {
             'P': 'wp', 'p': 'bp', 'R': 'wr', 'r': 'br', 'N': 'wn', 'n': 'bn',
             'B': 'wb', 'b': 'bb', 'Q': 'wq', 'q': 'bq', 'K': 'wk', 'k': 'bk'}
@@ -20,6 +21,7 @@ class ChessGame:
         self.board = chess.Board()
         self.images = self.load_images()
         self.selected_piece = None
+        self.last_move_squares = ()
 
         pygame.display.set_caption('Chess Tactics Trainer')
         pygame.display.set_icon(self.images['bk'])
@@ -45,12 +47,18 @@ class ChessGame:
 
     # Draw the chess board and pieces
     def draw(self):
+        piece_symbols = {
+            'P': 'wp', 'p': 'bp', 'R': 'wr', 'r': 'br', 'N': 'wn', 'n': 'bn',
+            'B': 'wb', 'b': 'bb', 'Q': 'wq', 'q': 'bq', 'K': 'wk', 'k': 'bk'}
+
         for row in range(8):
             for col in range(8):
                 square = chess.square(col, 7 - row)
 
                 if square == self.selected_piece:
                     colour = self.highlight_colours[(row + col) % 2]
+                elif square in self.last_move_squares:
+                    colour = self.last_move_colours[(row + col) % 2]
                 else:
                     colour = self.colours[(row + col) % 2]
 
@@ -68,7 +76,7 @@ class ChessGame:
                                                                   self.square_size, self.square_size))
                         
     def update_board(self):
-        self.window.fill(pygame.Color(184, 139, 74))
+        self.window.fill(self.colours[0])
         self.draw()
 
     def handle_click(self, pos):
@@ -82,14 +90,23 @@ class ChessGame:
         row = 7 - (y - self.offset_y) // self.square_size
         square = chess.square(col, row)
         piece = self.board.piece_at(square)
-        
-        if self.selected_piece:
+
+        # Deselect the piece if it is clicked again
+        if self.selected_piece == square:
+            self.selected_piece = None
+        # Move the selected piece to the clicked square if it is a legal move
+        elif self.selected_piece:
             move = chess.Move(self.selected_piece, square)
             if move in self.board.legal_moves:
                 self.board.push(move)
+                self.last_move_squares = (move.from_square, move.to_square)
                 self.selected_piece = None
-        
-        self.selected_piece = square if piece else None
+            else:
+                self.selected_piece = square if piece and piece.color == self.board.turn else None
+        # Select the clicked piece if it is a valid piece
+        else:
+            self.selected_piece = square if piece and piece.color == self.board.turn else None
+
         self.update_board()
 
     # Main game loop
