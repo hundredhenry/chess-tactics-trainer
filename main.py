@@ -45,6 +45,8 @@ class ChessGame:
 
     # Draw the chess board and pieces
     def draw(self):
+        self.window.fill(pygame.Color(184, 139, 74))
+
         for row in range(8):
             for col in range(8):
                 square = chess.square(col, 7 - row)
@@ -66,10 +68,6 @@ class ChessGame:
                         self.window.blit(piece_image, pygame.Rect(self.offset_x + col * self.square_size, 
                                                                   self.offset_y + row * self.square_size, 
                                                                   self.square_size, self.square_size))
-                        
-    def update_board(self):
-        self.window.fill(pygame.Color(184, 139, 74))
-        self.draw()
 
     def handle_click(self, pos):
         x, y = pos
@@ -90,12 +88,12 @@ class ChessGame:
                 self.selected_piece = None
         
         self.selected_piece = square if piece else None
-        self.update_board()
+        self.draw()
 
     # Main game loop
     def run(self):
         running = True
-        self.update_board()
+        self.draw()
 
         while running:
             # Limit the frame rate to 60 FPS
@@ -108,7 +106,7 @@ class ChessGame:
                     self.width, self.height = event.w, event.h
                     self.window = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
                     self.update_square_size_offsets()
-                    self.update_board()
+                    self.draw()
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     self.handle_click(event.pos)
             pygame.display.flip()
