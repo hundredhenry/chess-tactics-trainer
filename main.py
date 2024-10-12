@@ -52,21 +52,24 @@ class ChessGame:
             for col in range(8):
                 square = chess.square(col, 7 - row)
                 colour = self.colours['default'][(7 - row + col) % 2]
+                move = None
                 x, y = self.offset_x + col * self.square_size, self.offset_y + row * self.square_size
-
                 pygame.draw.rect(self.window, colour, pygame.Rect(x, y, self.square_size, self.square_size))
                 piece = self.board.piece_at(square)
 
-                if square == self.selected_piece or \
-                (self.selected_piece and chess.Move(self.selected_piece, square) in self.board.legal_moves):
-                    if square == self.selected_piece:
-                        highlight_colour = self.colours['highlight'][0]
-                    elif piece and piece.color != self.board.turn:
-                        highlight_colour = self.colours['capture']
+                if self.selected_piece:
+                    try:
+                        move = self.board.find_move(self.selected_piece, square)
+                    except chess.IllegalMoveError:
+                        pass
+
+                if square == self.selected_piece:
+                    self.highlight_square(x, y, self.colours['highlight'][0])
+                elif move:
+                    if self.board.is_capture(move):
+                        self.highlight_square(x, y, self.colours['capture'])
                     else:
-                        highlight_colour = self.colours['highlight'][1]
-                        
-                    self.highlight_square(x, y, highlight_colour)
+                        self.highlight_square(x, y, self.colours['highlight'][1])
                 elif square in self.last_move_squares:
                     self.highlight_square(x, y, self.colours['last_move'])
                 
@@ -104,12 +107,12 @@ class ChessGame:
             self.selected_piece = None
         # Move the selected piece to the clicked square if it is a legal move
         elif self.selected_piece:
-            move = chess.Move(self.selected_piece, square)
-            if move in self.board.legal_moves:
+            try:
+                move = self.board.find_move(self.selected_piece, square)
                 self.board.push(move)
                 self.last_move_squares = (move.from_square, move.to_square)
                 self.selected_piece = None
-            else:
+            except chess.IllegalMoveError:
                 self.selected_piece = square if piece and piece.color == self.board.turn else None
         # Select the clicked piece if it is a valid piece
         else:
