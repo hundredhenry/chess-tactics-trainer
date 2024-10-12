@@ -22,7 +22,6 @@ class ChessGame:
         self.board = chess.Board()
         self.images = self.load_images()
         self.selected_piece = None
-        self.last_move_squares = ()
 
         pygame.display.set_caption('Chess Tactics Trainer')
         pygame.display.set_icon(self.images['bk'])
@@ -54,8 +53,8 @@ class ChessGame:
                 colour = self.colours['default'][(7 - row + col) % 2]
                 move = None
                 x, y = self.offset_x + col * self.square_size, self.offset_y + row * self.square_size
-                pygame.draw.rect(self.window, colour, pygame.Rect(x, y, self.square_size, self.square_size))
                 piece = self.board.piece_at(square)
+                pygame.draw.rect(self.window, colour, pygame.Rect(x, y, self.square_size, self.square_size))
 
                 if self.selected_piece:
                     try:
@@ -70,8 +69,12 @@ class ChessGame:
                         self.highlight_square(x, y, self.colours['capture'])
                     else:
                         self.highlight_square(x, y, self.colours['highlight'][1])
-                elif square in self.last_move_squares:
-                    self.highlight_square(x, y, self.colours['last_move'])
+                elif self.board.is_check() and square == self.board.king(self.board.turn):
+                    self.highlight_square(x, y, self.colours['capture'])
+                elif self.board.move_stack:
+                    last_move = self.board.peek()
+                    if last_move and square in (last_move.from_square, last_move.to_square):
+                        self.highlight_square(x, y, self.colours['last_move'])
                 
                 if piece:
                     piece_image = self.images[self.piece_symbols[piece.symbol()]]
@@ -110,7 +113,6 @@ class ChessGame:
             try:
                 move = self.board.find_move(self.selected_piece, square)
                 self.board.push(move)
-                self.last_move_squares = (move.from_square, move.to_square)
                 self.selected_piece = None
             except chess.IllegalMoveError:
                 self.selected_piece = square if piece and piece.color == self.board.turn else None
