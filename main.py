@@ -11,9 +11,9 @@ class ChessGame:
         self.width, self.height = 1000, 1000
         self.square_size, self.offset_x, self.offset_y = 125, 0, 0
         self.window = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
-        self.colours = (pygame.Color(181, 136, 99), pygame.Color(240, 217, 181))
-        self.highlight_colours = (pygame.Color(100, 109, 64), pygame.Color(129, 150, 105))
-        self.last_move_colours = (pygame.Color(171, 162, 58), pygame.Color(206, 210, 107))
+        self.colours = {'default': (pygame.Color(181, 136, 99), pygame.Color(240, 217, 181)),
+                        'highlight': (pygame.Color(100, 109, 64), pygame.Color(129, 150, 105)),
+                        'last_move': (pygame.Color(171, 162, 58), pygame.Color(206, 210, 107))}
         self.piece_symbols = {
             'P': 'wp', 'p': 'bp', 'R': 'wr', 'r': 'br', 'N': 'wn', 'n': 'bn',
             'B': 'wb', 'b': 'bb', 'Q': 'wq', 'q': 'bq', 'K': 'wk', 'k': 'bk'}
@@ -47,18 +47,18 @@ class ChessGame:
 
     # Draw the chess board and pieces
     def draw(self):
-        
-
         for row in range(8):
             for col in range(8):
                 square = chess.square(col, 7 - row)
-
-                if square == self.selected_piece:
-                    colour = self.highlight_colours[(row + col) % 2]
+                
+                # Highlight the square if it is the selected piece, legal move, or last move
+                if square == self.selected_piece or \
+                (self.selected_piece and chess.Move(self.selected_piece, square) in self.board.legal_moves):
+                    colour = self.colours['highlight'][(7 - row + col) % 2]
                 elif square in self.last_move_squares:
-                    colour = self.last_move_colours[(row + col) % 2]
+                    colour = self.colours['last_move'][(7 - row + col) % 2]
                 else:
-                    colour = self.colours[(row + col) % 2]
+                    colour = self.colours['default'][(7 - row + col) % 2]
 
                 pygame.draw.rect(self.window, colour, pygame.Rect(self.offset_x + col * self.square_size, 
                                                                   self.offset_y + row * self.square_size, 
@@ -74,7 +74,7 @@ class ChessGame:
                                                                   self.square_size, self.square_size))
                         
     def update_board(self):
-        self.window.fill(self.colours[0])
+        self.window.fill(self.colours['default'][0])
         self.draw()
 
     def handle_click(self, pos):
