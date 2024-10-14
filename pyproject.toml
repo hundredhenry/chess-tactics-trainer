@@ -1,0 +1,35 @@
+[project]
+name = "cs310-project"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Henry Gao", email = "Henry.Gao@warwick.ac.uk" }
+]
+dependencies = [
+    "chess==1.10.0",
+    "colorama==0.4.6",
+    "numpy==2.1.1",
+    "pygame==2.6.1",
+    "stockfish==3.28.0",
+    "tqdm==4.66.5",
+]
+readme = "README.md"
+requires-python = ">= 3.8"
+classifiers = ["Private :: Do Not Upload"]
+
+[project.scripts]
+"cs310-project" = "cs310_project:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = []
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cs310_project"]

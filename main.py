@@ -8,8 +8,8 @@ pygame.init()
 
 class ChessGame:
     def __init__(self):
-        self.width, self.height = 1000, 1000
-        self.square_size, self.offset_x, self.offset_y = 125, 0, 0
+        self.width, self.height = 800, 800
+        self.square_size, self.offset_x, self.offset_y = 100, 0, 0
         self.window = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
         self.colours = {'default': (pygame.Color(181, 136, 99), pygame.Color(240, 217, 181)),
                         'highlight': (pygame.Color(115, 130, 85, 255), pygame.Color(115, 130, 85, 128)),
