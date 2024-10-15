@@ -1,7 +1,7 @@
 # Modules
-import numpy as np
 import pygame
 import chess
+from engine import Engine
 
 # Initialize Pygame
 pygame.init()
@@ -20,6 +20,7 @@ class ChessGame:
             'B': 'wb', 'b': 'bb', 'Q': 'wq', 'q': 'bq', 'K': 'wk', 'k': 'bk'}
         self.timer = pygame.time.Clock()
         self.board = chess.Board()
+        self.engine = Engine('dist/sunfish.exe', self.board)
         self.images = self.load_images()
         self.selected_piece = None
 
@@ -50,13 +51,13 @@ class ChessGame:
         for row in range(8):
             for col in range(8):
                 square = chess.square(col, 7 - row)
-                colour = self.colours['default'][(7 - row + col) % 2]
+                colour = self.colours['default'][((7 - row) + col) % 2]
                 move = None
                 x, y = self.offset_x + col * self.square_size, self.offset_y + row * self.square_size
                 piece = self.board.piece_at(square)
                 pygame.draw.rect(self.window, colour, pygame.Rect(x, y, self.square_size, self.square_size))
 
-                if self.selected_piece:
+                if self.selected_piece != None:
                     try:
                         move = self.board.find_move(self.selected_piece, square)
                     except chess.IllegalMoveError:
@@ -109,10 +110,9 @@ class ChessGame:
         if self.selected_piece == square:
             self.selected_piece = None
         # Move the selected piece to the clicked square if it is a legal move
-        elif self.selected_piece:
+        elif self.selected_piece != None:
             try:
-                move = self.board.find_move(self.selected_piece, square)
-                self.board.push(move)
+                self.board.push(self.board.find_move(self.selected_piece, square))
                 self.selected_piece = None
             except chess.IllegalMoveError:
                 self.selected_piece = square if piece and piece.color == self.board.turn else None
@@ -122,6 +122,10 @@ class ChessGame:
 
         self.update_board()
 
+    def make_engine_move(self):
+        move = self.engine.find_move(0.5)
+        self.board.push(move)
+
     # Main game loop
     def run(self):
         running = True
@@ -130,6 +134,10 @@ class ChessGame:
         while running:
             # Limit the frame rate to 60 FPS
             self.timer.tick(60)
+
+            if self.board.turn == chess.BLACK:
+                self.make_engine_move()
+                self.update_board()
             
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -141,8 +149,14 @@ class ChessGame:
                     self.update_board()
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     self.handle_click(event.pos)
+
+            if self.board.is_game_over():
+                print(f"Game Over: {self.board.result()}")
+                running = False
+
             pygame.display.flip()
 
+        self.engine.close()
         pygame.quit()
 
 if __name__ == "__main__":

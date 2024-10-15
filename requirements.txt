@@ -1,6 +1,5 @@
 chess==1.10.0
 colorama==0.4.6
-numpy==2.1.1
 pygame==2.6.1
 stockfish==3.28.0
 tqdm==4.66.5

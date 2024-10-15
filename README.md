@@ -1,3 +1,3 @@
 # cs310-project
 
-My project! Yippee!
+Describe your project here.
