@@ -50,13 +50,13 @@ async def uci_perft(engine, depth):
             engine.send_line(f"go perft {depth}")
 
         def line_received(self, engine: UciProtocol, line: str) -> None:
-            match = re.match("(\w+): (\d+)", line)
+            match = re.match(r"(\w+): (\d+)", line)
             if match:
                 move = chess.Move.from_uci(match.group(1))
                 cnt = int(match.group(2))
                 self.moves.append((move, cnt))
 
-            match = re.match("Nodes searched: (\d+)", line)
+            match = re.match(r"Nodes searched: (\d+)", line)
             if match:
                 self.result.set_result(self.moves)
                 self.set_finished()
@@ -377,7 +377,7 @@ class Best(Command):
             # otherwise python-chess won't parse it
             if "c0" in opts:
                 # The comment format is expected to be like 'am f1f2; bm f2f3'
-                for key, val in re.findall("(\w+) (\w+)", opts["c0"]):
+                for key, val in re.findall(r"(\w+) (\w+)", opts["c0"]):
                     opts[key] = [chess.Move.from_uci(val)]
             if "am" not in opts and "bm" not in opts:
                 if not args.quiet:
