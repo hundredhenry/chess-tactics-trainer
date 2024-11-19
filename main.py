@@ -8,7 +8,7 @@ class ChessGame:
     def __init__(self) -> None:
         self.init_display()
         self.init_board()
-        self.init_engine(use_engine = True, engine_path = r"./stockfish-windows-x86-64-avx2.exe", multipv = 10)
+        self.init_engine(use_engine = True, engine_path = r"./stockfish-windows-x86-64-avx2.exe")
 
     def init_display(self) -> None:
         pygame.init()
@@ -32,9 +32,10 @@ class ChessGame:
         self.board = chess.Board(fen)
         self.selected_piece = None
     
-    def init_engine(self, use_engine: bool, engine_path: str, multipv: int) -> None:
+    def init_engine(self, use_engine: bool, engine_path: str) -> None:
         self.use_engine = use_engine
-        self.engine = TacticsEngine(engine_path, self.board, multipv) if use_engine else None
+        self.engine = TacticsEngine(engine_path, self.board)
+        self.move_stack = []
 
     def load_images(self) -> dict:
         """
@@ -114,7 +115,6 @@ class ChessGame:
             last_move = self.board.peek()
             if last_move and square in (last_move.from_square, last_move.to_square):
                 self.highlight_square(x, y, self.colours['last_move'])
-            return
 
     def draw(self) -> None:
         """
@@ -130,7 +130,7 @@ class ChessGame:
                 pygame.draw.rect(self.window, colour, pygame.Rect(x, y, self.square_size, self.square_size))
 
                 move = None
-                if self.selected_piece:
+                if self.selected_piece != None:
                     try:
                         move = self.board.find_move(self.selected_piece, square)
                     except chess.IllegalMoveError:
@@ -166,7 +166,7 @@ class ChessGame:
         if self.selected_piece == square:
             self.selected_piece = None
         # Move the selected piece to the clicked square if it is a legal move
-        elif self.selected_piece:
+        elif self.selected_piece != None:
             try:
                 self.board.push(self.board.find_move(self.selected_piece, square))
                 self.selected_piece = None
@@ -185,8 +185,18 @@ class ChessGame:
         """
             Make a move using the engine.
         """
-        move = self.engine.find_move(0.5)
-        self.board.push(move)
+        if len(self.move_stack):
+            expected_move = self.move_stack.pop()
+
+        if len(self.move_stack):
+            if self.board.peek() == expected_move:
+                self.board.push(self.move_stack.pop())
+                return
+            else:
+                print("Missed best move: " + expected_move.uci())
+            
+        self.move_stack = self.engine.start_tactic_search()
+        self.board.push(self.move_stack.pop())
 
     def run(self) -> None:
         """

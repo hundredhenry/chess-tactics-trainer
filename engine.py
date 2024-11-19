@@ -1,129 +1,128 @@
 import chess
 import chess.engine
-from collections import namedtuple
-
-Pin = namedtuple('Pin', ['pinned', 'move', 'score', 'rank'])
-Fork = namedtuple('Fork', ['forked', 'move', 'score', 'rank'])
 
 class TacticsEngine:
-    def __init__(self, engine_path: str, board: chess.Board, multipv: int):
+    def __init__(self, engine_path: str, board: chess.Board) -> None:
         self.board = board
         self.engine = chess.engine.SimpleEngine.popen_uci(engine_path)
-        self.multipv = multipv
+        self.engine_colour = chess.BLACK
+        self.pv = 3
 
-    def find_move(self, time_limit: float):
-        result = self.engine.play(self.board, chess.engine.Limit(time=time_limit))
+    def start_tactic_search(self, time_limit: float = 1.0, depth: int = 5) -> list:
+        limit = chess.engine.Limit(time = time_limit, depth = depth)
+        tactic_pv = self.tactic_search(self.board, limit, depth)
+        if not tactic_pv:
+            analysis = self.engine.analyse(self.board, limit)
+            return [analysis["pv"][0]]
 
-        return result.move
+        return tactic_pv[::-1]
     
-    def check_tactics(self) -> dict:
-        info = self.engine.analyse(self.board, chess.engine.Limit(depth=10), multipv=self.multipv)
-        tactics = {}
+    def tactic_search(self, board: chess.Board, limit: chess.engine.Limit, depth: int) -> list:
+        if depth == 0:
+            return []
 
-        pins = []
-        forks = []
+        analysis = self.engine.analyse(board, limit, multipv=self.pv)
+        for i in range(len(analysis)):
+            pv = analysis[i]["pv"]
+            score = analysis[i]["score"].pov(self.engine_colour).score()
+            tactic = self.pv_tactic_check(board, pv)
 
-        for i in range(min(self.multipv, sum(1 for _ in self.board.legal_moves))):
-            score = info[i]["score"].relative.score()
-            pv = info[i]["pv"]
-            move = pv[0]
+            if tactic and score < 0:
+                return pv
 
-            tmp_board = self.board.copy()
-            tmp_board.push(move)
+            # If no tactic is found in initial PV, play the move and search for tactics
+            temp_board = board.copy()
+            temp_board.push(pv[0])
+            movestack = self.tactic_search(temp_board, limit, depth - 1)
+            if movestack:
+                return [pv[0]] + movestack
 
-            pins.extend(self.absolute_pins(tmp_board, move, score, i+1))
-            forks.extend(self.forks(tmp_board, move, score, i+1))
+        return []
         
-        tactics["pins"] = pins
-        tactics["forks"] = forks
+    def pv_tactic_check(self, board: chess.Board, pv: list) -> chess.Board:
+        temp_board = board.copy()
 
-        return tactics
-    
-    def pin_mask_queen(self, color: bool, square: int) -> chess.Bitboard:
-        queens = self.board.queens & self.board.occupied_co[color]
-        if not queens:
-            return chess.BB_ALL
+        for move in pv:
+            temp_board.push(move)
 
-        square_mask = chess.BB_SQUARES[square]
+            # Check if engine is in a fork
+            fork = Tactic.fork(temp_board)
+            if len(fork) and temp_board.turn == self.engine_colour:
+                print("Fork")
+                return temp_board
 
-        for attacks, sliders in [(chess.BB_FILE_ATTACKS, self.board.rooks | self.board.queens),
-                                 (chess.BB_RANK_ATTACKS, self.board.rooks | self.board.queens),
-                                 (chess.BB_DIAG_ATTACKS, self.board.bishops | self.board.queens)]:
-            for q in chess.scan_reversed(queens):
-                rays = attacks[q][0]
-                if rays & square_mask:
-                    snipers = rays & sliders & self.board.occupied_co[not color]
-                    for sniper in chess.scan_reversed(snipers):
-                        if chess.between(sniper, q) & (self.board.occupied | square_mask) == square_mask:
-                            return chess.ray(q, sniper)
+            #pin = Tactic.absolute_pin(temp_board)
+            # Check if engine is in a pin or fork
+            #if len(pin) and temp_board.turn == self.engine_colour:
+            #    print("Pin")
+            #    return temp_board
+            
+        return None
 
-        return chess.BB_ALL
+    def close(self) -> None:
+        self.engine.quit()
 
-    def absolute_pins(self, board: chess.Board, pinning_move: chess.Move, score: int, rank: int) -> list:
-        pins = []
-        pieces = board.occupied_co[board.turn]
+class Tactic:
+    @staticmethod
+    def absolute_pin(board: chess.Board) -> list:
+        if not board.move_stack:
+            return []
 
-        # Create a copy of the board and pop the last move once (to check for exisiting pins before the move)
-        tmp_board = board.copy()
-        tmp_board.pop()
+        pinned_pieces = []
+        # Previous position
+        last_position = board.copy()
+        last_position.pop()
 
-        for square in chess.scan_reversed(pieces):
+        # Search through all pieces of the current player
+        for square in chess.scan_reversed(board.occupied_co[board.turn]):
             piece = board.piece_at(square)
-
-            # Skip pawns and kings
-            if piece.piece_type == chess.PAWN or piece.piece_type == chess.KING:
+            # Skip king
+            if piece.piece_type == chess.KING:
                 continue
-
-            # Check if the piece is pinned because of the given move
-            if board.is_pinned(board.turn, square) and not tmp_board.is_pinned(board.turn, square):
+            # If the pin was not present in the last position, move is a pin
+            if board.is_pinned(board.turn, square) and not last_position.is_pinned(board.turn, square):
                 # Make sure the pinned piece has no legal moves (like capturing the pinning piece)
                 if all(move.from_square != square for move in board.legal_moves):
-                    attackers = tmp_board.attackers(not board.turn, square)
-                    defenders = tmp_board.attackers(board.turn, square)
+                    attackers = board.attackers(not board.turn, square)
+                    defenders = board.attackers(board.turn, square)
                     if len(attackers) >= len(defenders):
-                        piece_type = chess.piece_name(piece.piece_type)
-                        piece_square = chess.square_name(square)
-                        pins.append(Pin(square, pinning_move, score, rank))
-                        print(f"Absolute Pin: {piece_type} on {piece_square}")
+                        pinned_pieces.append(square)
 
-        return pins
+        return pinned_pieces
     
-    def forks(self, board: chess.Board, move: chess.Move, score: int, rank: int) -> list:
-        forks = []
+    @staticmethod
+    def fork(board: chess.Board) -> list:
+        if not board.move_stack:
+            return []
+
+        move = board.peek()
 
         # Check if the square the forking piece has moved to is defended
         if len(board.attackers(board.turn, move.to_square)):
-            return forks
+            return []
 
         # Check the pieces that the forking piece is attacking
-        attacked_squares = board.attacks(move.to_square) & board.occupied_co[board.turn]
+        attacked_pieces = board.attacks(move.to_square) & board.occupied_co[board.turn] 
+        # Attacking less than two pieces, not a fork
+        if len(attacked_pieces) < 2:
+            return []
+        
+        # Check if the attacked pieces are defended
         forked_squares = []
-        
-        if len(attacked_squares) >= 2:
-            # Check if the attacked squares are defended
-            for square in attacked_squares:
-                defenders = board.attackers(board.turn, square)
-                if len(defenders):
-                    continue
-                
-                forked_squares.append(square)
-        
-        if len(forked_squares) >= 2:
-            forks.append(Fork(forked_squares, move, score, rank))
-            for square in forked_squares:
-                piece_type = chess.piece_name(board.piece_type_at(square))
-                piece_square = chess.square_name(square)
-                print(f"Fork: {piece_type} on {piece_square}")
+        for square in attacked_pieces:
+            defenders = board.attackers(board.turn, square)
+            if len(defenders):
+                continue
 
-        return forks
-                
-    
-    def close(self):
-        self.engine.quit()
+            forked_squares.append(square)
+        # Attacking less than two undefended pieces, not a fork
+        if len(forked_squares) < 2:
+            return []
+
+        return forked_squares
 
 if __name__ == "__main__":
-    board = chess.Board("1k1r3r/ppqb1pQp/2n5/1B6/8/B3PN2/P4PPP/2R3K1 b - - 0 1")
-    engine = TacticsEngine(r"./stockfish-windows-x86-64-avx2.exe", board, 10)
-    pins = engine.check_tactics()
+    board = chess.Board("3n2k1/p4r1p/1pR1p1p1/5q2/3P4/4QP2/P3N1P1/6K1 w - - 0 1")
+    engine = Engine(r"./stockfish-windows-x86-64-avx2.exe", board)
+    temp_board = board.copy()
     engine.close()
-    print(pins)
