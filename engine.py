@@ -22,7 +22,7 @@ class TacticsEngine:
             else:
                 # Increase probability for next attempt if no tactic found
                 self.fails += 1
-                self.tactic_probability = min(0.8, self.tactic_probability + 0.1 * self.fails)
+                self.tactics_probability = min(0.8, self.tactics_probability + 0.1 * self.fails)
                 # Play worst move if no tactic found
                 analysis = self.engine.analyse(self.board, chess.engine.Limit(time=time_limit, depth=depth), multipv=self.pv)
                 return [analysis[len(analysis) - 1]["pv"][0]]
@@ -42,7 +42,6 @@ class TacticsEngine:
             return []
 
         analysis = self.engine.analyse(board, limit, multipv=self.pv)
-        print(analysis)
         # Check for a tactic for the engine to influence towards
         for infodict in analysis:
             pv = infodict["pv"]
