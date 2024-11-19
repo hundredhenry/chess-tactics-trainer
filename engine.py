@@ -1,5 +1,6 @@
 import chess
 import chess.engine
+import random
 
 class TacticsEngine:
     def __init__(self, engine_path: str, board: chess.Board) -> None:
@@ -7,13 +8,32 @@ class TacticsEngine:
         self.engine = chess.engine.SimpleEngine.popen_uci(engine_path)
         self.engine_colour = chess.BLACK
         self.pv = 3
+        self.fails = 0
+        self.tactics_probability = 0.3
 
-    def start_tactic_search(self, time_limit: float = 1.0, depth: int = 5) -> list:
+    def play_move(self, time_limit: float = 1.0, depth: int = 5) -> list:        
+        # Try tactical play based on probability
+        if random.random() < self.tactics_probability:
+            tactic_moves = self.start_tactic_search(time_limit, depth)
+            if len(tactic_moves):
+                # Reset fails, reduce probability and return tactic moves
+                self.fails = 0
+                return tactic_moves
+            else:
+                # Increase probability for next attempt if no tactic found
+                self.fails += 1
+                self.tactic_probability = min(0.8, self.tactic_probability + 0.1 * self.fails)
+                # Play worst move if no tactic found
+                analysis = self.engine.analyse(self.board, chess.engine.Limit(time=time_limit, depth=depth), multipv=self.pv)
+                return [analysis[len(analysis) - 1]["pv"][0]]
+        
+        # Fallback to standard engine analysis
+        analysis = self.engine.analyse(self.board, chess.engine.Limit(time=time_limit, depth=depth))
+        return [analysis["pv"][0]]
+
+    def start_tactic_search(self, time_limit, depth) -> list:
         limit = chess.engine.Limit(time = time_limit, depth = depth)
         tactic_pv = self.tactic_search(self.board, limit, depth)
-        if not tactic_pv:
-            analysis = self.engine.analyse(self.board, limit)
-            return [analysis["pv"][0]]
 
         return tactic_pv[::-1]
     
@@ -22,9 +42,11 @@ class TacticsEngine:
             return []
 
         analysis = self.engine.analyse(board, limit, multipv=self.pv)
-        for i in range(len(analysis)):
-            pv = analysis[i]["pv"]
-            score = analysis[i]["score"].pov(self.engine_colour).score()
+        print(analysis)
+        # Check for a tactic for the engine to influence towards
+        for infodict in analysis:
+            pv = infodict["pv"]
+            score = infodict["score"].pov(self.engine_colour).score()
             tactic = self.pv_tactic_check(board, pv)
 
             if tactic and score < 0:
@@ -35,6 +57,7 @@ class TacticsEngine:
             temp_board.push(pv[0])
             movestack = self.tactic_search(temp_board, limit, depth - 1)
             if movestack:
+                print([pv[0]] + movestack)
                 return [pv[0]] + movestack
 
         return []
@@ -95,6 +118,7 @@ class Tactic:
         if not board.move_stack:
             return []
 
+        # Get the move that the forking piece has made
         move = board.peek()
 
         # Check if the square the forking piece has moved to is defended
@@ -123,6 +147,6 @@ class Tactic:
 
 if __name__ == "__main__":
     board = chess.Board("3n2k1/p4r1p/1pR1p1p1/5q2/3P4/4QP2/P3N1P1/6K1 w - - 0 1")
-    engine = Engine(r"./stockfish-windows-x86-64-avx2.exe", board)
+    engine = TacticsEngine(r"./stockfish-windows-x86-64-avx2.exe", board)
     temp_board = board.copy()
     engine.close()

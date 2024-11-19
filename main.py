@@ -195,7 +195,7 @@ class ChessGame:
             else:
                 print("Missed best move: " + expected_move.uci())
             
-        self.move_stack = self.engine.start_tactic_search()
+        self.move_stack = self.engine.play_move()
         self.board.push(self.move_stack.pop())
 
     def run(self) -> None:
