@@ -38,17 +38,19 @@ class TacticsEngine:
         return tactic_pv[::-1]
     
     def tactic_search(self, board: chess.Board, limit: chess.engine.Limit, depth: int) -> list:
-        if depth == 0:
+        if depth == 0 or board.is_game_over():
             return []
 
         analysis = self.engine.analyse(board, limit, multipv=self.pv)
+        best_score = analysis[0]["score"].pov(self.engine_colour).score()
         # Check for a tactic for the engine to influence towards
         for infodict in analysis:
             pv = infodict["pv"]
             score = infodict["score"].pov(self.engine_colour).score()
             tactic = self.pv_tactic_check(board, pv)
 
-            if tactic and score < 0:
+            # If a tactic is found and the score is within 300 centipawns of the best score, return the tactic
+            if tactic and best_score - score <= 300:
                 return pv
 
             # If no tactic is found in initial PV, play the move and search for tactics
@@ -67,17 +69,22 @@ class TacticsEngine:
         for move in pv:
             temp_board.push(move)
 
+            # Check if engine is in checkmate
+            if  temp_board.is_checkmate() and temp_board.turn == self.engine_colour:
+                print("Checkmate")
+                return temp_board
+
             # Check if engine is in a fork
             fork = Tactic.fork(temp_board)
             if len(fork) and temp_board.turn == self.engine_colour:
                 print("Fork")
                 return temp_board
 
-            #pin = Tactic.absolute_pin(temp_board)
-            # Check if engine is in a pin or fork
-            #if len(pin) and temp_board.turn == self.engine_colour:
-            #    print("Pin")
-            #    return temp_board
+            pin = Tactic.absolute_pin(temp_board)
+            # Check if engine is in a pin
+            if len(pin) and temp_board.turn == self.engine_colour:
+                print("Pin")
+                return temp_board
             
         return None
 
@@ -95,7 +102,7 @@ class Tactic:
         last_position = board.copy()
         last_position.pop()
 
-        # Search through all pieces of the current player
+        # Search through all pieces
         for square in chess.scan_reversed(board.occupied_co[board.turn]):
             piece = board.piece_at(square)
             # Skip king
