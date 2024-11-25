@@ -31,7 +31,7 @@ class TacticsEngine:
         analysis = self.engine.analyse(self.board, chess.engine.Limit(time=time_limit, depth=depth))
         return [analysis["pv"][0]]
 
-    def start_tactic_search(self, time_limit, depth) -> list:
+    def start_tactic_search(self, time_limit: float, depth: int) -> list:
         limit = chess.engine.Limit(time = time_limit, depth = depth)
         tactic_pv = self.tactic_search(self.board, limit, depth)
 
@@ -43,14 +43,25 @@ class TacticsEngine:
 
         analysis = self.engine.analyse(board, limit, multipv=self.pv)
         best_score = analysis[0]["score"].pov(self.engine_colour).score()
+
+        if board.turn != self.engine_colour:
+            best_move = analysis[0]["pv"][0]
+            temp_board = board.copy()
+            temp_board.push(best_move)
+            movestack = self.tactic_search(temp_board, limit, depth - 1)
+            if movestack:
+                return [best_move] + movestack
+            else:
+                return []
+        
         # Check for a tactic for the engine to influence towards
         for infodict in analysis:
             pv = infodict["pv"]
             score = infodict["score"].pov(self.engine_colour).score()
             tactic = self.pv_tactic_check(board, pv)
 
-            # If a tactic is found and the score is within 300 centipawns of the best score, return the tactic
-            if tactic and best_score - score <= 300:
+            # If a tactic is found and the tactic gives an advantage of 100 centipawns over the best move, play the tactic
+            if tactic and score < best_score - 100:
                 return pv
 
             # If no tactic is found in initial PV, play the move and search for tactics
@@ -70,19 +81,19 @@ class TacticsEngine:
             temp_board.push(move)
 
             # Check if engine is in checkmate
-            if  temp_board.is_checkmate() and temp_board.turn == self.engine_colour:
+            if temp_board.is_checkmate():
                 print("Checkmate")
                 return temp_board
 
             # Check if engine is in a fork
             fork = Tactic.fork(temp_board)
-            if len(fork) and temp_board.turn == self.engine_colour:
+            if len(fork):
                 print("Fork")
                 return temp_board
 
             pin = Tactic.absolute_pin(temp_board)
             # Check if engine is in a pin
-            if len(pin) and temp_board.turn == self.engine_colour:
+            if len(pin):
                 print("Pin")
                 return temp_board
             
@@ -106,7 +117,7 @@ class Tactic:
         for square in chess.scan_reversed(board.occupied_co[board.turn]):
             piece = board.piece_at(square)
             # Skip king
-            if piece.piece_type == chess.KING:
+            if piece.piece_type == chess.KING or piece.piece_type == chess.PAWN:
                 continue
             # If the pin was not present in the last position, move is a pin
             if board.is_pinned(board.turn, square) and not last_position.is_pinned(board.turn, square):
@@ -140,11 +151,10 @@ class Tactic:
         # Check if the attacked pieces are defended
         forked_squares = []
         for square in attacked_pieces:
+            attackers = board.attackers(not board.turn, square)
             defenders = board.attackers(board.turn, square)
-            if len(defenders):
-                continue
-
-            forked_squares.append(square)
+            if len(attackers) > len(defenders):
+                forked_squares.append(square)
         # Attacking less than two undefended pieces, not a fork
         if len(forked_squares) < 2:
             return []
