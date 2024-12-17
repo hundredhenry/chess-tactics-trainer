@@ -76,6 +76,8 @@ class ChessGame:
         self.square_size = min_dimension // 8
         self.images = self.scale_images(self.images)
 
+        self.update_board()
+
     def draw_piece(self, piece: chess.Piece, x: int, y: int) -> None:
         """
             Draw the chess piece on the board.
@@ -218,7 +220,6 @@ class ChessGame:
                     running = False
                 elif event.type == pygame.VIDEORESIZE:
                     self.handle_resize(event)
-                    self.update_board()
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     self.handle_click(event.pos)
 
