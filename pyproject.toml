@@ -6,11 +6,12 @@ authors = [
     { name = "Henry Gao", email = "Henry.Gao@warwick.ac.uk" }
 ]
 dependencies = [
-    "chess==1.10.0",
+    "chess>=1.11.1",
     "colorama==0.4.6",
     "pygame==2.6.1",
     "tqdm==4.66.5",
     "pyinstaller>=6.10.0",
+    "pygame-menu>=4.5.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"

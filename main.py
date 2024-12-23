@@ -1,6 +1,7 @@
 # Modules
 import os
 import pygame
+import pygame_menu
 import chess
 from engine import TacticsEngine
 
@@ -8,7 +9,7 @@ class ChessGame:
     def __init__(self) -> None:
         self.init_display()
         self.init_board()
-        self.init_engine(use_engine = True, engine_path = r"./stockfish-windows-x86-64-avx2.exe")
+        self.init_engine(use_engine = True)
 
     def init_display(self) -> None:
         pygame.init()
@@ -31,11 +32,12 @@ class ChessGame:
     def init_board(self, fen: str = chess.STARTING_FEN) -> None:
         self.board = chess.Board(fen)
         self.selected_piece = None
-    
-    def init_engine(self, use_engine: bool, engine_path: str) -> None:
-        self.use_engine = use_engine
-        self.engine = TacticsEngine(engine_path, self.board)
         self.move_stack = []
+    
+    def init_engine(self, use_engine: bool) -> None:
+        self.engine_path = r"./stockfish-windows-x86-64-avx2.exe"
+        self.use_engine = use_engine
+        self.engine = TacticsEngine(self.engine_path, self.board)
 
     def load_images(self) -> dict:
         """
@@ -222,6 +224,25 @@ class ChessGame:
                     self.handle_resize(event)
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     self.handle_click(event.pos)
+                elif event.type == pygame.KEYDOWN:
+                    # Undo move
+                    if event.key == pygame.K_z:
+                        if self.board.move_stack:
+                            # Pop the engine move and the player move before it
+                            self.board.pop()
+                            self.board.pop()
+                            self.selected_piece = None
+                            self.move_stack = []
+                            self.update_board()
+                    # Reset board
+                    elif event.key == pygame.K_r:
+                        self.init_board()
+
+                        if self.use_engine:
+                            self.engine.close()
+                            self.init_engine(use_engine = self.use_engine)
+                            
+                        self.update_board()
 
             if self.board.is_game_over():
                 print(f"Game Over: {self.board.result()}")
@@ -231,8 +252,34 @@ class ChessGame:
 
         if self.use_engine:
             self.engine.close()
+
+        exit()
+
+    def menu(self) -> None:
+        menu = pygame_menu.Menu('Chess Tactics Trainer', 800, 800, theme=pygame_menu.themes.THEME_DEFAULT)
+        menu.add.button('Start', self.run)
+        menu.add.button('Quit', pygame_menu.events.EXIT)
+        running = True
+        
+        while running:
+            events = pygame.event.get()
+
+            for event in events:
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.VIDEORESIZE:
+                    self.width, self.height = event.w, event.h
+                    self.window = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
+                    menu.resize(self.width, self.height)
+
+            if menu.is_enabled():
+                menu.update(events)
+                menu.draw(self.window)
+                
+            pygame.display.flip()
+
         pygame.quit()
 
 if __name__ == "__main__":
     game = ChessGame()
-    game.run()
+    game.menu()

@@ -12,7 +12,7 @@
 -e file:.
 altgraph==0.17.4
     # via pyinstaller
-chess==1.10.0
+chess==1.11.1
     # via cs310-project
 colorama==0.4.6
     # via cs310-project
@@ -24,10 +24,15 @@ pefile==2024.8.26
     # via pyinstaller
 pygame==2.6.1
     # via cs310-project
+    # via pygame-menu
+pygame-menu==4.5.0
+    # via cs310-project
 pyinstaller==6.10.0
     # via cs310-project
 pyinstaller-hooks-contrib==2024.8
     # via pyinstaller
+pyperclip==1.9.0
+    # via pygame-menu
 pywin32-ctypes==0.2.3
     # via pyinstaller
 setuptools==75.1.0
@@ -35,3 +40,5 @@ setuptools==75.1.0
     # via pyinstaller-hooks-contrib
 tqdm==4.66.5
     # via cs310-project
+typing-extensions==4.12.2
+    # via pygame-menu
