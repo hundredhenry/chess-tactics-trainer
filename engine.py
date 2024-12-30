@@ -12,13 +12,13 @@ PIECE_VALUES = {
 }
 
 class TacticsEngine:
-    def __init__(self, engine_path: str, board: chess.Board) -> None:
+    def __init__(self, engine_path: str, board: chess.Board, engine_colour: chess.Color) -> None:
         self.board = board
         self.engine = chess.engine.SimpleEngine.popen_uci(engine_path)
-        self.engine_colour = chess.BLACK
-        self.pv = 10
+        self.engine_colour = engine_colour
+        self.pv = 5
         self.fails = 3
-        self.tactics_probability = 0.25
+        self.tactics_probability = 1.0
 
     def play_move(self, time_limit: float = 1.0, depth: int = 15) -> list:        
         # Try tactical play based on probability
@@ -31,9 +31,10 @@ class TacticsEngine:
             else:
                 # Increase probability for next attempt if no tactic found
                 self.fails += 1
-                self.tactics_probability = min(0.8, self.tactics_probability + 0.1 * self.fails)
+                self.tactics_probability = min(1.0, self.tactics_probability + 0.1 * self.fails)
                 # Play the worst move if no tactic found
                 analysis = self.engine.analyse(self.board, chess.engine.Limit(time=time_limit, depth=depth), multipv=self.pv)
+                print("No tactic found, playing worst move")
                 return [analysis[-1]["pv"][0]]
         
         # Fallback to standard engine analysis
@@ -42,8 +43,9 @@ class TacticsEngine:
 
     def start_tactic_search(self, time_limit: float, depth: int) -> list:
         limit = chess.engine.Limit(time = time_limit, depth = depth)
-        search_depth = 15
+        search_depth = 20
         tactic_pv = self.tactic_search(self.board, limit, search_depth)
+        print("Tactic PV:", tactic_pv)
 
         return tactic_pv[::-1]
     
@@ -53,7 +55,8 @@ class TacticsEngine:
             return []
 
         # Generate principal variations for the current position
-        analysis = self.engine.analyse(board, limit, multipv=self.pv)
+        min_pv = min(board.legal_moves.count(), self.pv)
+        analysis = self.engine.analyse(board, limit, multipv=min_pv)
         if board.turn != self.engine_colour:
             return self.play_human_move(analysis, board, limit, search_depth)
         
@@ -72,11 +75,11 @@ class TacticsEngine:
             
             # If a tactic is found and the tactic is winning, return the tactic
             tactic_index = self.pv_tactic_check(board, pv)
-            if tactic_index and score < 0:
+            if tactic_index and score < -100:
                 return pv[:tactic_index + 1]
 
             # If no tactic is found in initial PV, play moves above a score cutoff to search for tactics
-            if score > best_score - 50:
+            if score > best_score - 40:
                 temp_board = board.copy()
                 temp_board.push(pv[0])
                 movestack = self.tactic_search(temp_board, limit, search_depth - 1)
@@ -87,14 +90,14 @@ class TacticsEngine:
     
     def play_human_move(self, analysis: dict, board: chess.Board, limit: chess.engine.Limit, search_depth: int) -> list:
         best_human_score = analysis[0]["score"].pov(board.turn).score()
-        second_human_score = analysis[1]["score"].pov(board.turn).score()
+        second_human_score = analysis[1]["score"].pov(board.turn).score() if len(analysis) > 1 else None
 
-        # Checkmate line for human or engine
+        # Checkmate line for human or engine or no second best move
         if best_human_score is None or second_human_score is None:
             return analysis[0]["pv"]
 
         # Human opponent's best move should be siginificantly better than other moves
-        if best_human_score > second_human_score + 100:
+        if best_human_score > second_human_score + 200:
             # Play the best move and search for tactics
             best_move = analysis[0]["pv"][0]
             temp_board = board.copy()
@@ -162,23 +165,23 @@ class Tactic:
             return []
 
         pinned_pieces = []
+        pinning_move = board.peek()
         # Previous position
         last_position = board.copy()
         last_position.pop()
 
+        # Filter out kings and pawns
+        filtered_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
+
         # Search through all pieces
-        for square in chess.scan_reversed(board.occupied_co[board.turn]):
-            piece = board.piece_at(square)
-
-            # Skip king
-            if piece.piece_type == chess.KING or piece.piece_type == chess.PAWN:
-                continue
-
+        for square in chess.scan_reversed(filtered_pieces):
             # If the pin was not present in the last position, move is a pin
             if board.is_pinned(board.turn, square) and not last_position.is_pinned(board.turn, square):
                 # Make sure the pinned piece has no legal moves (like capturing the pinning piece)
                 if all(move.from_square != square for move in board.legal_moves):
-                    pinned_pieces.append(square)
+                    # Make sure the pinning piece is not attacked
+                    if len(board.attackers(board.turn, pinning_move.to_square)) == 0:
+                        pinned_pieces.append(square)
 
         return pinned_pieces
     
@@ -188,34 +191,39 @@ class Tactic:
             return []
         
         pinned_pieces = []
+        pinning_move = board.peek()
         # Previous position
         last_position = board.copy()
         last_position.pop()
 
+        # Filter out kings and pawns
+        filtered_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
+
         # Search through all valuable minor pieces
-        for piece_square in chess.scan_reversed(board.occupied_co[board.turn]):
+        for piece_square in chess.scan_reversed(filtered_pieces):
             piece = board.piece_at(piece_square)
+
             # Search through all potential pinned pieces
-            for pin_square in chess.scan_reversed(board.occupied_co[board.turn]):
+            for pin_square in chess.scan_reversed(filtered_pieces):
                 # Skip if the piece is the same
                 if piece_square == pin_square:
                     continue
 
-                # Skip kings and pawns
                 pinned = board.piece_at(pin_square)
-                if pinned.piece_type == chess.KING or pinned.piece_type == chess.PAWN:
-                    continue
-
                 # Skip if the pinned piece is more valuable
                 if PIECE_VALUES[pinned.piece_type] > PIECE_VALUES[piece.piece_type]:
                     continue
 
-                # Check
+                # Check if the piece is pinned
                 pin_mask = Tactic.relative_pin_mask(board, board.turn, pin_square, piece_square)
                 last_pos_pin_mask = Tactic.relative_pin_mask(last_position, board.turn, pin_square, piece_square)
+                # If the pin was not present in the last position, move is a pin
                 if pin_mask != chess.BB_ALL and last_pos_pin_mask == chess.BB_ALL:
+                    # Make sure the pinned piece has no legal moves (like capturing the pinning piece)
                     if all(move.from_square != piece_square for move in board.legal_moves):
-                        pinned_pieces.append(piece_square)
+                        # Make sure the pinning piece is not attacked
+                        if len(board.attackers(board.turn, pinning_move.to_square)) == 0:
+                            pinned_pieces.append(piece_square)
 
         return pinned_pieces
             
@@ -226,14 +234,14 @@ class Tactic:
             return []
 
         # Get the move that the forking piece has made
-        move = board.peek()
+        forking_move = board.peek()
 
         # Check if the square the forking piece has moved to is defended
-        if len(board.attackers(board.turn, move.to_square)):
+        if len(board.attackers(board.turn, forking_move.to_square)):
             return []
 
         # Check the pieces that the forking piece is attacking
-        attacked_pieces = board.attacks(move.to_square) & board.occupied_co[board.turn] 
+        attacked_pieces = board.attacks(forking_move.to_square) & board.occupied_co[board.turn] 
         # Attacking less than two pieces, not a fork
         if len(attacked_pieces) < 2:
             return []
@@ -241,7 +249,7 @@ class Tactic:
         # Check if the attacked pieces are defended
         forked_squares = []
         for square in attacked_pieces:
-            forking_piece = board.piece_at(move.to_square)
+            forking_piece = board.piece_at(forking_move.to_square)
             defenders = board.attackers(board.turn, square)
             # Check that the value of the forked piece is greater than the forking piece
             if PIECE_VALUES[board.piece_at(square).piece_type] > PIECE_VALUES[forking_piece.piece_type]:
