@@ -25,6 +25,10 @@ pefile==2024.8.26
 pygame==2.6.1
     # via cs310-project
     # via pygame-menu
+pygame-ce==2.5.2
+    # via pygame-gui
+pygame-gui==0.6.13
+    # via cs310-project
 pygame-menu==4.5.0
     # via cs310-project
 pyinstaller==6.10.0
@@ -33,6 +37,8 @@ pyinstaller-hooks-contrib==2024.8
     # via pyinstaller
 pyperclip==1.9.0
     # via pygame-menu
+python-i18n==0.3.9
+    # via pygame-gui
 pywin32-ctypes==0.2.3
     # via pyinstaller
 setuptools==75.1.0

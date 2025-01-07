@@ -17,34 +17,27 @@ class TacticsEngine:
         self.engine = chess.engine.SimpleEngine.popen_uci(engine_path)
         self.engine_colour = engine_colour
         self.pv = 5
-        self.fails = 3
-        self.tactics_probability = 1.0
+        self.search_depth = 5
 
-    def play_move(self, time_limit: float = 1.0, depth: int = 15) -> list:        
+    def play_move(self) -> list:        
         # Try tactical play based on probability
-        if random.random() < self.tactics_probability:
-            tactic_moves = self.start_tactic_search(time_limit, depth)
-            if len(tactic_moves):
-                # Reset fails, reduce probability and return tactic moves
-                self.fails = 0
-                return tactic_moves
-            else:
-                # Increase probability for next attempt if no tactic found
-                self.fails += 1
-                self.tactics_probability = min(1.0, self.tactics_probability + 0.1 * self.fails)
-                # Play the worst move if no tactic found
-                analysis = self.engine.analyse(self.board, chess.engine.Limit(time=time_limit, depth=depth), multipv=self.pv)
-                print("No tactic found, playing worst move")
-                return [analysis[-1]["pv"][0]]
-        
-        # Fallback to standard engine analysis
-        analysis = self.engine.analyse(self.board, chess.engine.Limit(time=time_limit, depth=depth))
-        return [analysis["pv"][0]]
+        tactic_moves = self.start_tactic_search()
+        if len(tactic_moves) > 0:
+            # Reset search depth if tactic found
+            self.search_depth -= 2
+            return tactic_moves
+        else:
+            # Increase search depth if no tactic found
+            self.search_depth += 1
+            # Play random move if no tactic found
+            analysis = self.engine.analyse(self.board, chess.engine.Limit(time=1.0, depth=15), multipv=self.pv)
+            random_int = random.randint(0, len(analysis) - 1)
+            print("No tactic found, playing random move:", analysis[random_int]["pv"][0])
+            return [analysis[random_int]["pv"][0]]
 
-    def start_tactic_search(self, time_limit: float, depth: int) -> list:
-        limit = chess.engine.Limit(time = time_limit, depth = depth)
-        search_depth = 20
-        tactic_pv = self.tactic_search(self.board, limit, search_depth)
+    def start_tactic_search(self) -> list:
+        limit = chess.engine.Limit(time=1.0, depth=15)
+        tactic_pv = self.tactic_search(self.board, limit, self.search_depth)
         print("Tactic PV:", tactic_pv)
 
         return tactic_pv[::-1]
