@@ -194,7 +194,7 @@ class ChessGame:
         self.init_engine()
         self.update_board()
         # UI elements
-        manager = pygame_gui.UIManager((self.width, self.height))
+        manager = pygame_gui.UIManager((self.width, self.height), 'theme.json')
         tactic_status = pygame_gui.elements.UIStatusBar(relative_rect=pygame.Rect((0, self.height - 50, self.square_size, 50)),
                                                         manager=manager)
         hint_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((2 * self.square_size, self.height - 50, self.square_size, 50)), 
@@ -217,7 +217,9 @@ class ChessGame:
             if not self.board.turn == self.player_colour:
                 self.make_engine_move()
                 if len(self.move_stack) > 0:
-                    pass
+                    tactic_status.percent_full = 100
+                else:
+                    tactic_status.percent_full = 0
 
                 self.update_board()
             
@@ -260,7 +262,7 @@ class ChessGame:
                 
                 manager.process_events(event)
 
-            pygame.display.update()
+            pygame.display.flip()
 
     def menu(self) -> None:
         running = True
@@ -289,7 +291,7 @@ class ChessGame:
 
             main_menu.update(events)
             main_menu.draw(self.window)
-            pygame.display.update()
+            pygame.display.flip()
 
         pygame.quit()
 
