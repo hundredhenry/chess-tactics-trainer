@@ -7,7 +7,6 @@ import chess
 import random
 from engine import TacticsEngine
 
-
 SQUARE = [pygame.Color(240, 217, 181), pygame.Color(181, 136, 99)]
 HIGHLIGHT_MOVE = pygame.Color(115, 130, 85, 128)
 HIGHLIGHT_PIECE = pygame.Color(115, 130, 85, 255)
@@ -20,7 +19,9 @@ class ChessGame:
 
     def init_display(self) -> None:
         pygame.init()
-        self.width, self.height = 800, 850
+        info = pygame.display.Info()
+
+        self.width, self.height = info.current_h - 150, info.current_h - 100
         self.square_size = self.width // 8
         self.window = pygame.display.set_mode((self.width, self.height))
         self.timer = pygame.time.Clock()
@@ -212,6 +213,10 @@ class ChessGame:
             time_delta = self.timer.tick(60)
             manager.update(time_delta)
             manager.draw_ui(self.window)
+
+            if self.board.is_game_over():
+                running = False
+                break
 
             # Make the engine move if it is the engine's turn
             if not self.board.turn == self.player_colour:

@@ -31,6 +31,10 @@ class TacticsEngine:
             self.search_depth += 1
             # Play random move if no tactic found
             analysis = self.engine.analyse(self.board, chess.engine.Limit(time=1.0, depth=15), multipv=self.pv)
+            score = analysis[0]["score"].pov(self.engine_colour).score()
+            if score is None:
+                return analysis[0]["pv"][0]
+            
             random_int = random.randint(0, len(analysis) - 1)
             print("No tactic found, playing random move:", analysis[random_int]["pv"][0])
             return [analysis[random_int]["pv"][0]]
