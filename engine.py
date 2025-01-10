@@ -40,7 +40,7 @@ class TacticsEngine:
             return [analysis[random_int]["pv"][0]]
 
     def start_tactic_search(self) -> list:
-        limit = chess.engine.Limit(time=1.0, depth=15)
+        limit = chess.engine.Limit(time=5.0, depth=12)
         tactic_pv = self.tactic_search(self.board, limit, self.search_depth)
         print("Tactic PV:", tactic_pv)
 
@@ -76,10 +76,10 @@ class TacticsEngine:
                 return pv[:tactic_index + 1]
 
             # If no tactic is found in initial PV, play moves above a score cutoff to search for tactics
-            if score > best_score - 40:
-                temp_board = board.copy()
-                temp_board.push(pv[0])
-                movestack = self.tactic_search(temp_board, limit, search_depth - 1)
+            if score > best_score - 30:
+                board.push(pv[0])
+                movestack = self.tactic_search(board, limit, search_depth - 1)
+                board.pop()
                 if movestack:
                     return [pv[0]] + movestack
 
@@ -97,16 +97,16 @@ class TacticsEngine:
         if best_human_score > second_human_score + 200:
             # Play the best move and search for tactics
             best_move = analysis[0]["pv"][0]
-            temp_board = board.copy()
-            temp_board.push(best_move)
-            movestack = self.tactic_search(temp_board, limit, search_depth - 1)
+            board.push(best_move)
+            movestack = self.tactic_search(board, limit, search_depth - 1)
+            board.pop()
             if movestack:
                 return [best_move] + movestack
         
         return []
         
     def pv_tactic_check(self, board: chess.Board, pv: list) -> chess.Board:
-        temp_board = board.copy()
+        temp_board = board.copy(stack=False)
 
         for index in range(len(pv)):
             temp_board.push(pv[index])
