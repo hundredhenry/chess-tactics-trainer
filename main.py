@@ -12,6 +12,7 @@ HIGHLIGHT_MOVE = pygame.Color(115, 130, 85, 128)
 HIGHLIGHT_PIECE = pygame.Color(115, 130, 85, 255)
 LAST_MOVE = pygame.Color(189, 186, 83, 128)
 CAPTURE = pygame.Color(204, 0, 0, 128)
+HINT = pygame.Color(49, 120, 115, 128)
 
 class ChessGame:
     def __init__(self) -> None:
@@ -39,6 +40,7 @@ class ChessGame:
         self.selected_piece = None
         self.highlight_hint = False
         self.move_stack = []
+        self.hint_move = None
     
     def init_engine(self) -> None:
         self.engine_path = r"./stockfish-windows-x86-64-avx2.exe"
@@ -56,6 +58,13 @@ class ChessGame:
                 images[symbol] = None
 
         return images
+    
+    def set_player_colour(self, tuple: tuple, value: int) -> None:
+        # Set the player colour to the selected value, or randomly if 'Random' is selected
+        if tuple[0][0] == 'Random':
+            self.player_colour = random.choice([chess.WHITE, chess.BLACK])
+        else:
+            self.player_colour = value
 
     def draw_piece(self, piece: chess.Piece, x: int, y: int) -> None:
         # Get the image for the piece
@@ -71,9 +80,10 @@ class ChessGame:
         self.window.blit(board_surface, pygame.Rect(x, y, self.square_size, self.square_size))
             
     def highlight_logic(self, square: chess.Square, move: chess.Move, x: int, y: int) -> None:
-        if self.highlight_hint and len(self.move_stack) > 0:
-            hint_move = self.move_stack[-1]
-            self.selected_piece = hint_move.from_square
+
+        if self.hint_move != None and square == self.hint_move.to_square:
+            self.highlight_square(x, y, HINT)
+            return
 
         if square == self.selected_piece:
             self.highlight_square(x, y, HIGHLIGHT_PIECE)
@@ -96,6 +106,10 @@ class ChessGame:
                 self.highlight_square(x, y, LAST_MOVE)
 
     def draw(self) -> None:
+        if self.highlight_hint and len(self.move_stack) > 0:
+            self.hint_move = self.move_stack[-1]
+            self.selected_piece = self.hint_move.from_square
+
         for row in range(8):
             for col in range(8):
                 # Flip row if playing as black
@@ -123,6 +137,16 @@ class ChessGame:
         # Clear window and redraw the board
         self.window.fill((66,69,73))
         self.draw()
+
+    def play_move_sound(self, move: chess.Move) -> None:
+        if self.board.gives_check(move):
+            pygame.mixer.Sound('sounds/move-check.mp3').play()
+        elif self.board.is_capture(move):
+            pygame.mixer.Sound('sounds/capture.mp3').play()
+        elif move.promotion:
+            pygame.mixer.Sound('sounds/promote.mp3').play()
+        else:
+            pygame.mixer.Sound('sounds/move-self.mp3').play()
 
     def handle_click(self, pos: tuple[int, int]) -> None:
         x, y = pos
@@ -152,20 +176,11 @@ class ChessGame:
                     self.play_move_sound(move)
                     self.board.push(move)
                     self.selected_piece = None
+                    self.hint_move = None
                     self.highlight_hint = False
                 except chess.IllegalMoveError:
                     if piece and piece.color == self.board.turn:
                         self.selected_piece = square
-    
-    def play_move_sound(self, move: chess.Move) -> None:
-        if self.board.gives_check(move):
-            pygame.mixer.Sound('sounds/move-check.mp3').play()
-        elif self.board.is_capture(move):
-            pygame.mixer.Sound('sounds/capture.mp3').play()
-        elif move.promotion:
-            pygame.mixer.Sound('sounds/promote.mp3').play()
-        else:
-            pygame.mixer.Sound('sounds/move-self.mp3').play()
 
     def make_engine_move(self) -> None:
         # Pop the player move before the engine move
@@ -181,13 +196,6 @@ class ChessGame:
         move = self.move_stack.pop()
         self.play_move_sound(move)
         self.board.push(move)
-
-    def set_player_colour(self, tuple: tuple, value: int) -> None:
-        # Set the player colour to the selected value, or randomly if 'Random' is selected
-        if tuple[0][0] == 'Random':
-            self.player_colour = random.choice([chess.WHITE, chess.BLACK])
-        else:
-            self.player_colour = value
 
     def run(self) -> None:
         running = True
@@ -214,12 +222,8 @@ class ChessGame:
             manager.update(time_delta)
             manager.draw_ui(self.window)
 
-            if self.board.is_game_over():
-                running = False
-                break
-
             # Make the engine move if it is the engine's turn
-            if not self.board.turn == self.player_colour:
+            if not self.board.turn == self.player_colour and not self.board.is_game_over():
                 self.make_engine_move()
                 if len(self.move_stack) > 0:
                     tactic_status.percent_full = 100
