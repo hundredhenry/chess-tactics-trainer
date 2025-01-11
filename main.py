@@ -80,7 +80,6 @@ class ChessGame:
         self.window.blit(board_surface, pygame.Rect(x, y, self.square_size, self.square_size))
             
     def highlight_logic(self, square: chess.Square, move: chess.Move, x: int, y: int) -> None:
-
         if self.hint_move != None and square == self.hint_move.to_square:
             self.highlight_square(x, y, HINT)
             return

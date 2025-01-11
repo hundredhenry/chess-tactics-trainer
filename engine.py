@@ -11,33 +11,45 @@ PIECE_VALUES = {
     chess.KING: 20000
 }
 
+TACTIC_TYPES = {
+    "Checkmate": 0,
+    "Fork": 1,
+    "Absolute Pin": 2,
+    "Relative Pin": 3
+}
+
+class Tactic:
+    def __init__(self, pv: list, tactic_type: int) -> None:
+        self.pv = pv
+        self.tactic_type = tactic_type
+
 class TacticsEngine:
     def __init__(self, engine_path: str, board: chess.Board, engine_colour: chess.Color) -> None:
         self.board = board
         self.engine = chess.engine.SimpleEngine.popen_uci(engine_path)
         self.engine_colour = engine_colour
         self.pv = 5
-        self.search_depth = 5
+        self.search_depth = 10
+        self.current_tactic = None
 
     def play_move(self) -> list:        
-        # Try tactical play based on probability
         tactic_moves = self.start_tactic_search()
-        if len(tactic_moves) > 0:
-            # Reset search depth if tactic found
-            self.search_depth -= 2
+        if tactic_moves:
+            self.search_depth = max(10, self.search_depth - 2)
             return tactic_moves
-        else:
-            # Increase search depth if no tactic found
-            self.search_depth += 1
-            # Play random move if no tactic found
-            analysis = self.engine.analyse(self.board, chess.engine.Limit(time=1.0, depth=15), multipv=self.pv)
-            score = analysis[0]["score"].pov(self.engine_colour).score()
-            if score is None:
-                return analysis[0]["pv"][0]
-            
-            random_int = random.randint(0, len(analysis) - 1)
-            print("No tactic found, playing random move:", analysis[random_int]["pv"][0])
-            return [analysis[random_int]["pv"][0]]
+        
+        self.search_depth += 1
+        limit = chess.engine.Limit(time=5.0, depth=12)
+        analysis = self.engine.analyse(self.board, limit, multipv=self.pv)
+        
+        # Check for checkmate line
+        if analysis[0]["score"].pov(self.engine_colour).score() is None:
+            return [analysis[0]["pv"][0]]
+        
+        move = analysis[random.randint(0, len(analysis) - 1)]["pv"][0]
+        print(f"No tactic found, playing random move: {move}")
+
+        return [move]
 
     def start_tactic_search(self) -> list:
         limit = chess.engine.Limit(time=5.0, depth=12)
@@ -72,7 +84,7 @@ class TacticsEngine:
             
             # If a tactic is found and the tactic is winning, return the tactic
             tactic_index = self.pv_tactic_check(board, pv)
-            if tactic_index and score < -100:
+            if tactic_index >= 0 and score < -100:
                 return pv[:tactic_index + 1]
 
             # If no tactic is found in initial PV, play moves above a score cutoff to search for tactics
@@ -86,59 +98,48 @@ class TacticsEngine:
         return []
     
     def play_human_move(self, analysis: dict, board: chess.Board, limit: chess.engine.Limit, search_depth: int) -> list:
-        best_human_score = analysis[0]["score"].pov(board.turn).score()
-        second_human_score = analysis[1]["score"].pov(board.turn).score() if len(analysis) > 1 else None
+        if len(analysis) < 2:
+            return analysis[0]["pv"]
+        
+        best_score = analysis[0]["score"].pov(board.turn).score()
+        second_score = analysis[1]["score"].pov(board.turn).score()
 
-        # Checkmate line for human or engine or no second best move
-        if best_human_score is None or second_human_score is None:
+        # Return PV if either score is None (checkmate)
+        if best_score is None or second_score is None:
             return analysis[0]["pv"]
 
-        # Human opponent's best move should be siginificantly better than other moves
-        if best_human_score > second_human_score + 200:
-            # Play the best move and search for tactics
+        # Check if best move is significantly better
+        if best_score > second_score + 150:
             best_move = analysis[0]["pv"][0]
             board.push(best_move)
-            movestack = self.tactic_search(board, limit, search_depth - 1)
+            tactic_moves = self.tactic_search(board, limit, search_depth - 1)
             board.pop()
-            if movestack:
-                return [best_move] + movestack
+            return [best_move] + tactic_moves if tactic_moves else []
+        else:
+            return []
         
-        return []
-        
-    def pv_tactic_check(self, board: chess.Board, pv: list) -> chess.Board:
+    def pv_tactic_check(self, board: chess.Board, pv: list) -> int:
         temp_board = board.copy(stack=False)
 
-        for index in range(len(pv)):
-            temp_board.push(pv[index])
+        for index, move in enumerate(pv):
+            temp_board.push(move)
 
-            # Check if engine is to move
-            if temp_board.turn != self.engine_colour:
-                continue
+            # Skip if it's not engine's turn
+            if temp_board.turn == self.engine_colour:
+                # Check for any tactical patterns
+                if any([
+                    TacticSearch.fork(temp_board),
+                    TacticSearch.absolute_pin(temp_board),
+                    TacticSearch.relative_pin(temp_board)
+                ]):
+                    return index
 
-            # Check if engine is in a fork
-            fork = Tactic.fork(temp_board)
-            if len(fork):
-                print("Fork")
-                return index
-
-            absolute_pin = Tactic.absolute_pin(temp_board)
-            # Check if engine is in a pin
-            if len(absolute_pin):
-                print("Absolute Pin")
-                return index
-            
-            relative_pin = Tactic.relative_pin(temp_board)
-            # Check if engine is in a relative pin
-            if len(relative_pin):
-                print("Relative Pin")
-                return index
-            
-        return None
+        return -1
 
     def close(self) -> None:
         self.engine.quit()
 
-class Tactic:
+class TacticSearch:
     @staticmethod
     def relative_pin_mask(board: chess.Board, colour: chess.Color, square: chess.Square, piece: chess.Square) -> chess.Bitboard:      
         square_mask = chess.BB_SQUARES[square]
@@ -212,8 +213,8 @@ class Tactic:
                     continue
 
                 # Check if the piece is pinned
-                pin_mask = Tactic.relative_pin_mask(board, board.turn, pin_square, piece_square)
-                last_pos_pin_mask = Tactic.relative_pin_mask(last_position, board.turn, pin_square, piece_square)
+                pin_mask = TacticSearch.relative_pin_mask(board, board.turn, pin_square, piece_square)
+                last_pos_pin_mask = TacticSearch.relative_pin_mask(last_position, board.turn, pin_square, piece_square)
                 # If the pin was not present in the last position, move is a pin
                 if pin_mask != chess.BB_ALL and last_pos_pin_mask == chess.BB_ALL:
                     # Make sure the pinned piece has no legal moves (like capturing the pinning piece)
@@ -260,9 +261,3 @@ class Tactic:
             return []
 
         return forked_squares
-
-if __name__ == "__main__":
-    board = chess.Board("8/5k2/8/6R1/4NP2/4B1K1/6Pr/8 b - - 0 1")
-    engine = TacticsEngine(r"./stockfish-windows-x86-64-avx2.exe", board)
-    engine.play_move()
-    engine.close()
