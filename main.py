@@ -188,7 +188,6 @@ class ChessGame:
             # Check if the player has made the expected move
             if self.board.peek() != expected_move:
                 self.move_stack = self.engine.play_move()
-                print("Missed best move: " + expected_move.uci())
         else:
             self.move_stack = self.engine.play_move()
             

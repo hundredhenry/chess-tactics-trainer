@@ -41,10 +41,17 @@ class TacticsEngine:
         self.search_depth += 1
         limit = chess.engine.Limit(time=5.0, depth=12)
         analysis = self.engine.analyse(self.board, limit, multipv=self.pv)
-        score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
-        move = analysis[random.randint(0, len(analysis) - 1)]["pv"][0]
+        current_move = analysis[0]["pv"][0]
 
-        return [move]
+        for infodict in analysis[1:]:
+            pv = infodict["pv"]
+            score = infodict["score"].pov(self.engine_colour).score(mate_score=100000)
+            if score < 0:
+                return [current_move]
+            else:
+                current_move = pv[0]
+
+        return [current_move]
 
     def start_tactic_search(self) -> list:
         limit = chess.engine.Limit(time=5.0, depth=15)
