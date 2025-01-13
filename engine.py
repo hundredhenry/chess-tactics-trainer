@@ -41,20 +41,14 @@ class TacticsEngine:
         self.search_depth += 1
         limit = chess.engine.Limit(time=5.0, depth=12)
         analysis = self.engine.analyse(self.board, limit, multipv=self.pv)
-        
-        # Check for checkmate line
-        if analysis[0]["score"].pov(self.engine_colour).score() is None:
-            return [analysis[0]["pv"][0]]
-        
+        score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
         move = analysis[random.randint(0, len(analysis) - 1)]["pv"][0]
-        print(f"No tactic found, playing random move: {move}")
 
         return [move]
 
     def start_tactic_search(self) -> list:
-        limit = chess.engine.Limit(time=5.0, depth=12)
+        limit = chess.engine.Limit(time=5.0, depth=15)
         tactic_pv = self.tactic_search(self.board, limit, self.search_depth)
-        print("Tactic PV:", tactic_pv)
 
         return tactic_pv[::-1]
     
@@ -69,22 +63,21 @@ class TacticsEngine:
         if board.turn != self.engine_colour:
             return self.play_human_move(analysis, board, limit, search_depth)
         
-        best_score = analysis[0]["score"].pov(self.engine_colour).score()
-        # Checkmate line for human or engine
-        if best_score is None:
+        best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
+        # Checkmate line for human
+        if best_score < -5000:
+            self.current_tactic = Tactic(analysis[0]["pv"], TACTIC_TYPES["Checkmate"])
             return analysis[0]["pv"]
         
         # Check for a tactic for the engine to influence towards
         for infodict in analysis:
             pv = infodict["pv"]
-            score = infodict["score"].pov(self.engine_colour).score()
-            # Checkmate line, skip
-            if score is None:
-                continue
+            score = infodict["score"].pov(self.engine_colour).score(mate_score=100000)
             
             # If a tactic is found and the tactic is winning, return the tactic
-            tactic_index = self.pv_tactic_check(board, pv)
+            tactic_index, tactic_type = self.pv_tactic_check(board, pv)
             if tactic_index >= 0 and score < -100:
+                self.current_tactic = Tactic(pv[:tactic_index + 1], tactic_type)
                 return pv[:tactic_index + 1]
 
             # If no tactic is found in initial PV, play moves above a score cutoff to search for tactics
@@ -101,11 +94,12 @@ class TacticsEngine:
         if len(analysis) < 2:
             return analysis[0]["pv"]
         
-        best_score = analysis[0]["score"].pov(board.turn).score()
-        second_score = analysis[1]["score"].pov(board.turn).score()
+        best_score = analysis[0]["score"].pov(board.turn).score(mate_score=100000)
+        second_score = analysis[1]["score"].pov(board.turn).score(mate_score=100000)
 
-        # Return PV if either score is None (checkmate)
-        if best_score is None or second_score is None:
+        # Return PV if checkmate line for human
+        if best_score > 5000:
+            self.current_tactic = Tactic(analysis[0]["pv"], TACTIC_TYPES["Checkmate"])
             return analysis[0]["pv"]
 
         # Check if best move is significantly better
@@ -118,7 +112,7 @@ class TacticsEngine:
         else:
             return []
         
-    def pv_tactic_check(self, board: chess.Board, pv: list) -> int:
+    def pv_tactic_check(self, board: chess.Board, pv: list) -> tuple:
         temp_board = board.copy(stack=False)
 
         for index, move in enumerate(pv):
@@ -127,14 +121,14 @@ class TacticsEngine:
             # Skip if it's not engine's turn
             if temp_board.turn == self.engine_colour:
                 # Check for any tactical patterns
-                if any([
-                    TacticSearch.fork(temp_board),
-                    TacticSearch.absolute_pin(temp_board),
-                    TacticSearch.relative_pin(temp_board)
-                ]):
-                    return index
+                if TacticSearch.fork(temp_board):
+                    return index, TACTIC_TYPES["Fork"]
+                elif TacticSearch.absolute_pin(temp_board):
+                    return index, TACTIC_TYPES["Absolute Pin"]
+                elif TacticSearch.relative_pin(temp_board):
+                    return index, TACTIC_TYPES["Relative Pin"]
 
-        return -1
+        return -1, -1
 
     def close(self) -> None:
         self.engine.quit()

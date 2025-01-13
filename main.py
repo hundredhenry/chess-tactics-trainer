@@ -201,6 +201,7 @@ class ChessGame:
         self.init_board()
         self.init_engine()
         self.update_board()
+
         # UI elements
         manager = pygame_gui.UIManager((self.width, self.height), 'theme.json')
         tactic_status = pygame_gui.elements.UIStatusBar(relative_rect=pygame.Rect((0, self.height - 50, self.square_size, 50)),
