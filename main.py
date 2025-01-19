@@ -39,7 +39,7 @@ class ChessGame:
         self.board = chess.Board(fen)
         self.selected_piece = None
         self.highlight_hint = False
-        self.move_stack = []
+        self.engine_stack = []
         self.hint_move = None
     
     def init_engine(self) -> None:
@@ -105,8 +105,8 @@ class ChessGame:
                 self.highlight_square(x, y, LAST_MOVE)
 
     def draw(self) -> None:
-        if self.highlight_hint and len(self.move_stack) > 0:
-            self.hint_move = self.move_stack[-1]
+        if self.highlight_hint and len(self.engine_stack) > 0:
+            self.hint_move = self.engine_stack[-1]
             self.selected_piece = self.hint_move.from_square
 
         for row in range(8):
@@ -183,15 +183,15 @@ class ChessGame:
 
     def make_engine_move(self) -> None:
         # Pop the player move before the engine move
-        if len(self.move_stack) >= 2:
-            expected_move = self.move_stack.pop()
+        if len(self.engine_stack) >= 2:
+            expected_move = self.engine_stack.pop()
             # Check if the player has made the expected move
             if self.board.peek() != expected_move:
-                self.move_stack = self.engine.play_move()
+                self.engine_stack = self.engine.play_move()
         else:
-            self.move_stack = self.engine.play_move()
+            self.engine_stack = self.engine.play_move()
             
-        move = self.move_stack.pop()
+        move = self.engine_stack.pop()
         self.play_move_sound(move)
         self.board.push(move)
 
@@ -224,7 +224,7 @@ class ChessGame:
             # Make the engine move if it is the engine's turn
             if not self.board.turn == self.player_colour and not self.board.is_game_over():
                 self.make_engine_move()
-                if len(self.move_stack) > 0:
+                if len(self.engine_stack) > 0:
                     tactic_status.percent_full = 100
                 else:
                     tactic_status.percent_full = 0
@@ -240,7 +240,7 @@ class ChessGame:
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
                     # Get hint
                     if event.ui_element == hint_button:
-                        if len(self.move_stack) > 0:
+                        if len(self.engine_stack) > 0:
                             self.highlight_hint = True
                             self.update_board()
                     # Undo move
@@ -250,7 +250,7 @@ class ChessGame:
                             self.board.pop()
                             self.board.pop()
                             self.selected_piece = None
-                            self.move_stack = []
+                            self.engine_stack = []
                             self.update_board()
                     # Reset board
                     elif event.ui_element == reset_button:

@@ -1,6 +1,5 @@
 import chess
 import chess.engine
-import random
 
 PIECE_VALUES = {
     chess.PAWN: 100,
@@ -226,7 +225,6 @@ class TacticSearch:
 
         return pinned_pieces
             
-    
     @staticmethod
     def fork(board: chess.Board) -> list:
         if not board.move_stack:
