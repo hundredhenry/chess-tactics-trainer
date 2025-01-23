@@ -12,13 +12,13 @@ class Evaluation:
         self.tactic_stack = []
         self.tactic_count = 0
 
-    def play_game(self):
+    def play_tactic_game(self):
         while not self.board.is_game_over():
-            if self.tactics_engine_turn:
-                if TacticSearch.relative_pin(self.board) or TacticSearch.absolute_pin(self.board) or TacticSearch.fork(self.board):
+            if TacticSearch.relative_pin(self.board) or TacticSearch.absolute_pin(self.board) or TacticSearch.fork(self.board):
                     print("Tactic Found")
                     self.tactic_count += 1
 
+            if self.tactics_engine_turn:
                 if len(self.tactic_stack) >= 2:
                     expected_move = self.tactic_stack.pop()
                     if self.board.peek() != expected_move:
@@ -28,23 +28,31 @@ class Evaluation:
 
                 move = self.tactic_stack.pop()
                 self.board.push(move)
-                print("Tactics Engine Move: ", move)
             else:
-                result = self.engine.play(self.board, chess.engine.Limit(time=1.0))
+                result = self.engine.play(self.board, chess.engine.Limit(time=1.0, depth=8))
                 self.board.push(result.move)
-                print("Stockfish Move: ", result.move)
 
             self.tactics_engine_turn = not self.tactics_engine_turn
 
-        self.tactic_count += 1
         print(self.board.result())
         self.engine.quit()
         self.tactics_engine.close()
 
+    def play_normal_game(self):
+        while not self.board.is_game_over():
+            if TacticSearch.relative_pin(self.board) or TacticSearch.absolute_pin(self.board) or TacticSearch.fork(self.board):
+                print("Tactic Found")
+                self.tactic_count += 1
+
+            result = self.engine.play(self.board, chess.engine.Limit(time=1.0, depth=12))
+            self.board.push(result.move)
+
+        print(self.board.result())
+        self.engine.quit()
 
 if __name__ == "__main__":
     evaluation = Evaluation()
-    evaluation.play_game()
+    evaluation.play_normal_game()
     print("Tactic Count: ", evaluation.tactic_count)
 
 
