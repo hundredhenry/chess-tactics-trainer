@@ -18,9 +18,9 @@ TACTIC_TYPES = {
 }
 
 class Tactic:
-    def __init__(self, pv: list, tactic_type: int) -> None:
+    def __init__(self, pv: list, type: int) -> None:
         self.pv = pv
-        self.tactic_type = tactic_type
+        self.type = type
 
 class TacticsEngine:
     def __init__(self, engine_path: str, board: chess.Board, engine_colour: chess.Color) -> None:
@@ -31,7 +31,8 @@ class TacticsEngine:
         self.search_depth = 10
         self.current_tactic = None
 
-    def play_move(self) -> list:        
+    def play_move(self) -> list:
+        self.current_tactic = None
         tactic_moves = self.start_tactic_search()
         if tactic_moves:
             self.search_depth = max(10, self.search_depth - 2)
@@ -40,6 +41,7 @@ class TacticsEngine:
         self.search_depth += 1
         limit = chess.engine.Limit(time=5.0, depth=12)
         analysis = self.engine.analyse(self.board, limit, multipv=self.pv)
+        # Starts with the best move
         current_move = analysis[0]["pv"][0]
 
         for infodict in analysis[1:]:
@@ -97,11 +99,9 @@ class TacticsEngine:
         return []
     
     def play_human_move(self, analysis: dict, board: chess.Board, limit: chess.engine.Limit, search_depth: int) -> list:
-        if len(analysis) < 2:
-            return analysis[0]["pv"]
-        
         best_score = analysis[0]["score"].pov(board.turn).score(mate_score=100000)
-        second_score = analysis[1]["score"].pov(board.turn).score(mate_score=100000)
+        if len(analysis) > 1:
+            second_score = analysis[1]["score"].pov(board.turn).score(mate_score=100000)
 
         # Return PV if checkmate line for human
         if best_score > 5000:
@@ -109,14 +109,15 @@ class TacticsEngine:
             return analysis[0]["pv"]
 
         # Check if best move is significantly better
-        if best_score > second_score + 150:
+        if best_score > second_score + 150 or len(analysis) < 2:
             best_move = analysis[0]["pv"][0]
             board.push(best_move)
             tactic_moves = self.tactic_search(board, limit, search_depth - 1)
             board.pop()
-            return [best_move] + tactic_moves if tactic_moves else []
-        else:
-            return []
+            if tactic_moves:
+                return [best_move] + tactic_moves
+        
+        return []
         
     def pv_tactic_check(self, board: chess.Board, pv: list) -> tuple:
         temp_board = board.copy(stack=False)

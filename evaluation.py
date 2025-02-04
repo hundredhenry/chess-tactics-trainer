@@ -35,8 +35,7 @@ class Evaluation:
             self.tactics_engine_turn = not self.tactics_engine_turn
 
         print(self.board.result())
-        self.engine.quit()
-        self.tactics_engine.close()
+        self.close()
 
     def play_normal_game(self):
         while not self.board.is_game_over():
@@ -48,7 +47,11 @@ class Evaluation:
             self.board.push(result.move)
 
         print(self.board.result())
+        self.close()
+
+    def close(self):
         self.engine.quit()
+        self.tactics_engine.close()
 
 if __name__ == "__main__":
     evaluation = Evaluation()

@@ -5,7 +5,7 @@ import pygame_gui
 import pygame_menu
 import chess
 import random
-from engine import TacticsEngine
+from engine import TacticsEngine, Tactic, TACTIC_TYPES
 
 SQUARE = [pygame.Color(240, 217, 181), pygame.Color(181, 136, 99)]
 HIGHLIGHT_MOVE = pygame.Color(115, 130, 85, 128)
@@ -137,6 +137,22 @@ class ChessGame:
         self.window.fill((66,69,73))
         self.draw()
 
+    def display_tactic_text(self) -> None:
+        font = pygame.font.Font('freesansbold.ttf', 32)
+        
+        if self.engine.current_tactic.type == TACTIC_TYPES[0]:
+            text = font.render(f'Mate in {len(self.engine_stack / 2)} moves', True, (255, 255, 255))
+        elif self.engine.current_tactic.type == TACTIC_TYPES[1]:
+            text = font.render(f'Fork in {len(self.engine_stack / 2)} moves', True, (255, 255, 255))
+        elif self.engine.current_tactic.type == TACTIC_TYPES[2]:
+            text = font.render(f'Absolute Pin in {len(self.engine_stack / 2)} moves', True, (255, 255, 255))
+        elif self.engine.current_tactic.type == TACTIC_TYPES[3]:
+            text = font.render(f'Relative Pin in {len(self.engine_stack / 2)} moves', True, (255, 255, 255))
+        
+        text_rect = text.get_rect()
+        text_rect.center = (self.width // 2, self.height // 2)
+        self.window.blit(text, text_rect)
+
     def play_move_sound(self, move: chess.Move) -> None:
         if self.board.gives_check(move):
             pygame.mixer.Sound('sounds/move-check.mp3').play()
@@ -203,7 +219,7 @@ class ChessGame:
 
         # UI elements
         manager = pygame_gui.UIManager((self.width, self.height), 'theme.json')
-        tactic_status = pygame_gui.elements.UIStatusBar(relative_rect=pygame.Rect((0, self.height - 50, self.square_size, 50)),
+        tactic_status = pygame_gui.elements.UIStatusBar(relative_rect=pygame.Rect((0, self.height - 50, 1.5 * self.square_size, 50)),
                                                         manager=manager)
         hint_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((2 * self.square_size, self.height - 50, self.square_size, 50)), 
                                                    text='Hint', manager=manager)
@@ -220,11 +236,13 @@ class ChessGame:
             time_delta = self.timer.tick(60)
             manager.update(time_delta)
             manager.draw_ui(self.window)
+            if self.engine.current_tactic:
+                self.display_tactic_text()
 
             # Make the engine move if it is the engine's turn
             if not self.board.turn == self.player_colour and not self.board.is_game_over():
                 self.make_engine_move()
-                if len(self.engine_stack) > 0:
+                if self.engine.current_tactic:
                     tactic_status.percent_full = 100
                 else:
                     tactic_status.percent_full = 0
@@ -240,7 +258,7 @@ class ChessGame:
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
                     # Get hint
                     if event.ui_element == hint_button:
-                        if len(self.engine_stack) > 0:
+                        if self.engine.current_tactic > 0:
                             self.highlight_hint = True
                             self.update_board()
                     # Undo move
@@ -251,6 +269,7 @@ class ChessGame:
                             self.board.pop()
                             self.selected_piece = None
                             self.engine_stack = []
+                            self.engine.current_tactic = None
                             self.update_board()
                     # Reset board
                     elif event.ui_element == reset_button:
@@ -258,6 +277,7 @@ class ChessGame:
                         # Reinitialize the engine
                         self.engine.close()
                         self.init_engine()
+                        self.engine.current_tactic = None
                         self.update_board()
                     # Return to the main menu
                     elif event.ui_element == menu_button:
