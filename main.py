@@ -138,17 +138,40 @@ class ChessGame:
         self.draw()
 
     def display_tactic_text(self) -> None:
+        font = pygame.font.Font('freesansbold.ttf', 16)
+        num_moves = (len(self.engine_stack) + 1) // 2
+        
+        if self.engine.current_tactic.type == TACTIC_TYPES['Checkmate']:
+            text = font.render(f'Mate in {num_moves} moves', True, (255, 255, 255))
+        elif self.engine.current_tactic.type == TACTIC_TYPES['Fork']:
+            text = font.render(f'Fork in {num_moves} moves', True, (255, 255, 255))
+        elif self.engine.current_tactic.type == TACTIC_TYPES['Absolute Pin']:
+            text = font.render(f'Absolute Pin in {num_moves} moves', True, (255, 255, 255))
+        elif self.engine.current_tactic.type == TACTIC_TYPES['Relative Pin']:
+            text = font.render(f'Relative Pin in {num_moves} moves', True, (255, 255, 255))
+        
+        text_rect = text.get_rect()
+        text_rect.center = (self.square_size, self.height - 25)
+        self.window.blit(text, text_rect)
+
+    def display_game_over(self, outcome: chess.Outcome) -> None:
         font = pygame.font.Font('freesansbold.ttf', 32)
         
-        if self.engine.current_tactic.type == TACTIC_TYPES[0]:
-            text = font.render(f'Mate in {len(self.engine_stack / 2)} moves', True, (255, 255, 255))
-        elif self.engine.current_tactic.type == TACTIC_TYPES[1]:
-            text = font.render(f'Fork in {len(self.engine_stack / 2)} moves', True, (255, 255, 255))
-        elif self.engine.current_tactic.type == TACTIC_TYPES[2]:
-            text = font.render(f'Absolute Pin in {len(self.engine_stack / 2)} moves', True, (255, 255, 255))
-        elif self.engine.current_tactic.type == TACTIC_TYPES[3]:
-            text = font.render(f'Relative Pin in {len(self.engine_stack / 2)} moves', True, (255, 255, 255))
         
+        if outcome.winner == self.player_colour:
+            text = font.render('You Won', True, (255, 255, 255))
+        elif outcome.winner == (not self.player_colour):
+            text = font.render('You Lost', True, (255, 255, 255))
+        else:
+            if outcome.termination == chess.Termination.STALEMATE:
+                text = font.render('Draw: Stalemate', True, (255, 255, 255))
+            elif outcome.termination == chess.Termination.FIFTY_MOVES:
+                text = font.render('Draw: Fifty Move Rule', True, (255, 255, 255))
+            elif outcome.termination == chess.Termination.THREEFOLD_REPETITION:
+                text = font.render('Draw: Threefold Repetition', True, (255, 255, 255))
+            elif outcome.termination == chess.Termination.INSUFFICIENT_MATERIAL:
+                text = font.render('Draw: Insufficient Material', True, (255, 255, 255))
+
         text_rect = text.get_rect()
         text_rect.center = (self.width // 2, self.height // 2)
         self.window.blit(text, text_rect)
@@ -219,13 +242,13 @@ class ChessGame:
 
         # UI elements
         manager = pygame_gui.UIManager((self.width, self.height), 'theme.json')
-        tactic_status = pygame_gui.elements.UIStatusBar(relative_rect=pygame.Rect((0, self.height - 50, 1.5 * self.square_size, 50)),
+        tactic_status = pygame_gui.elements.UIStatusBar(relative_rect=pygame.Rect((0, self.height - 50, 2 * self.square_size, 50)),
                                                         manager=manager)
-        hint_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((2 * self.square_size, self.height - 50, self.square_size, 50)), 
+        hint_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((3 * self.square_size, self.height - 50, self.square_size, 50)), 
                                                    text='Hint', manager=manager)
-        undo_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((3 * self.square_size, self.height - 50, self.square_size, 50)), 
+        undo_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((4 * self.square_size, self.height - 50, self.square_size, 50)), 
                                                    text='Undo', manager=manager)
-        reset_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((4 * self.square_size, self.height - 50, self.square_size, 50)), 
+        reset_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((5 * self.square_size, self.height - 50, self.square_size, 50)), 
                                                     text='Reset', manager=manager)
         menu_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((7 * self.square_size, self.height - 50, self.square_size, 50)), 
                                                    text='Menu', manager=manager)
@@ -248,6 +271,10 @@ class ChessGame:
                     tactic_status.percent_full = 0
 
                 self.update_board()
+
+            outcome = self.board.outcome()
+            if outcome:
+                self.display_game_over(outcome)
             
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -258,7 +285,7 @@ class ChessGame:
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
                     # Get hint
                     if event.ui_element == hint_button:
-                        if self.engine.current_tactic > 0:
+                        if self.engine.current_tactic:
                             self.highlight_hint = True
                             self.update_board()
                     # Undo move

@@ -27,7 +27,7 @@ class TacticsEngine:
         self.board = board
         self.engine = chess.engine.SimpleEngine.popen_uci(engine_path)
         self.engine_colour = engine_colour
-        self.pv = 5
+        self.pv = 6
         self.search_depth = 10
         self.current_tactic = None
 
@@ -35,7 +35,7 @@ class TacticsEngine:
         self.current_tactic = None
         tactic_moves = self.start_tactic_search()
         if tactic_moves:
-            self.search_depth = max(10, self.search_depth - 2)
+            self.search_depth = min(10, self.search_depth - 2)
             return tactic_moves
         
         self.search_depth += 1
@@ -47,7 +47,7 @@ class TacticsEngine:
         for infodict in analysis[1:]:
             pv = infodict["pv"]
             score = infodict["score"].pov(self.engine_colour).score(mate_score=100000)
-            if score < 0:
+            if score < 0 or score < -300:
                 return [current_move]
             else:
                 current_move = pv[0]
@@ -84,12 +84,12 @@ class TacticsEngine:
             
             # If a tactic is found and the tactic is winning, return the tactic
             tactic_index, tactic_type = self.pv_tactic_check(board, pv)
-            if tactic_index >= 0 and score < -100:
+            if tactic_index >= 0 and score < -200:
                 self.current_tactic = Tactic(pv[:tactic_index + 1], tactic_type)
                 return pv[:tactic_index + 1]
 
             # If no tactic is found in initial PV, play moves above a score cutoff to search for tactics
-            if score > best_score - 30:
+            if score > best_score - 50:
                 board.push(pv[0])
                 movestack = self.tactic_search(board, limit, search_depth - 1)
                 board.pop()
@@ -109,7 +109,7 @@ class TacticsEngine:
             return analysis[0]["pv"]
 
         # Check if best move is significantly better
-        if best_score > second_score + 150 or len(analysis) < 2:
+        if best_score > second_score + 200 or len(analysis) < 2:
             best_move = analysis[0]["pv"][0]
             board.push(best_move)
             tactic_moves = self.tactic_search(board, limit, search_depth - 1)
