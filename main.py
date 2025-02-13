@@ -39,7 +39,6 @@ class ChessGame:
         self.board = chess.Board(fen)
         self.selected_piece = None
         self.highlight_hint = False
-        self.engine_stack = []
         self.hint_move = None
     
     def init_engine(self) -> None:
@@ -105,8 +104,8 @@ class ChessGame:
                 self.highlight_square(x, y, LAST_MOVE)
 
     def draw(self) -> None:
-        if self.highlight_hint and len(self.engine_stack) > 0:
-            self.hint_move = self.engine_stack[-1]
+        if self.highlight_hint and self.engine.current_tactic.moves_left() > 0:
+            self.hint_move = self.engine.current_tactic.hint_move()
             self.selected_piece = self.hint_move.from_square
 
         for row in range(8):
@@ -139,17 +138,16 @@ class ChessGame:
 
     def display_tactic_text(self) -> None:
         font = pygame.font.Font('freesansbold.ttf', 16)
-        num_moves = (len(self.engine_stack) + 1) // 2
+        num_moves = self.engine.current_tactic.moves_left()
         
-        if self.engine.current_tactic.type == TACTIC_TYPES['Checkmate']:
-            text = font.render(f'Mate in {num_moves} moves', True, (255, 255, 255))
-        elif self.engine.current_tactic.type == TACTIC_TYPES['Fork']:
-            text = font.render(f'Fork in {num_moves} moves', True, (255, 255, 255))
-        elif self.engine.current_tactic.type == TACTIC_TYPES['Absolute Pin']:
-            text = font.render(f'Absolute Pin in {num_moves} moves', True, (255, 255, 255))
-        elif self.engine.current_tactic.type == TACTIC_TYPES['Relative Pin']:
-            text = font.render(f'Relative Pin in {num_moves} moves', True, (255, 255, 255))
-        
+        tactic_messages = {
+            TACTIC_TYPES['Checkmate']: 'Mate in {num_moves} moves',
+            TACTIC_TYPES['Fork']: 'Fork in {num_moves} moves',
+            TACTIC_TYPES['Absolute Pin']: 'Absolute Pin in {num_moves} moves',
+            TACTIC_TYPES['Relative Pin']: 'Relative Pin in {num_moves} moves'
+        }
+        message = tactic_messages.get(self.engine.current_tactic.type, '').format(num_moves=num_moves)
+        text = font.render(message, True, (255, 255, 255))
         text_rect = text.get_rect()
         text_rect.center = (self.square_size, self.height - 25)
         self.window.blit(text, text_rect)
@@ -157,20 +155,18 @@ class ChessGame:
     def display_game_over(self, outcome: chess.Outcome) -> None:
         font = pygame.font.Font('freesansbold.ttf', 32)
         
-        
         if outcome.winner == self.player_colour:
-            text = font.render('You Won', True, (255, 255, 255))
+            text = font.render('You Won', True, (0, 0, 0))
         elif outcome.winner == (not self.player_colour):
-            text = font.render('You Lost', True, (255, 255, 255))
+            text = font.render('You Lost', True, (0, 0, 0))
         else:
-            if outcome.termination == chess.Termination.STALEMATE:
-                text = font.render('Draw: Stalemate', True, (255, 255, 255))
-            elif outcome.termination == chess.Termination.FIFTY_MOVES:
-                text = font.render('Draw: Fifty Move Rule', True, (255, 255, 255))
-            elif outcome.termination == chess.Termination.THREEFOLD_REPETITION:
-                text = font.render('Draw: Threefold Repetition', True, (255, 255, 255))
-            elif outcome.termination == chess.Termination.INSUFFICIENT_MATERIAL:
-                text = font.render('Draw: Insufficient Material', True, (255, 255, 255))
+            draw_messages = {
+                chess.Termination.STALEMATE: 'Draw: Stalemate',
+                chess.Termination.FIFTY_MOVES: 'Draw: Fifty Move Rule',
+                chess.Termination.THREEFOLD_REPETITION: 'Draw: Threefold Repetition',
+                chess.Termination.INSUFFICIENT_MATERIAL: 'Draw: Insufficient Material'
+            }
+            text = font.render(draw_messages.get(outcome.termination, 'Draw'), True, (0, 0, 0))
 
         text_rect = text.get_rect()
         text_rect.center = (self.width // 2, self.height // 2)
@@ -221,16 +217,7 @@ class ChessGame:
                         self.selected_piece = square
 
     def make_engine_move(self) -> None:
-        # Pop the player move before the engine move
-        if len(self.engine_stack) >= 2:
-            expected_move = self.engine_stack.pop()
-            # Check if the player has made the expected move
-            if self.board.peek() != expected_move:
-                self.engine_stack = self.engine.play_move()
-        else:
-            self.engine_stack = self.engine.play_move()
-            
-        move = self.engine_stack.pop()
+        move = self.engine.play_move()
         self.play_move_sound(move)
         self.board.push(move)
 
@@ -278,8 +265,8 @@ class ChessGame:
             
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    running = False
                     self.engine.close()
+                    pygame.quit()
                     exit()
                     
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
@@ -295,8 +282,16 @@ class ChessGame:
                             self.board.pop()
                             self.board.pop()
                             self.selected_piece = None
-                            self.engine_stack = []
-                            self.engine.current_tactic = None
+                            self.highlight_hint = False
+                            if self.engine.current_tactic:
+                                self.engine.undo_tactic_move()
+                                if self.engine.current_tactic == None:
+                                    tactic_status.percent_full = 0
+                            else:
+                                if self.board.fullmove_number in self.engine.tactic_cache:
+                                    self.engine.current_tactic = self.engine.tactic_cache[self.board.fullmove_number]
+                                    tactic_status.percent_full = 100
+
                             self.update_board()
                     # Reset board
                     elif event.ui_element == reset_button:
