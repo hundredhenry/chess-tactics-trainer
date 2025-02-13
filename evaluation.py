@@ -4,59 +4,63 @@ from engine import TacticsEngine
 from engine import TacticSearch
 
 class Evaluation:
-    def __init__(self):
-        self.board = chess.Board()
-        self.tactics_engine_turn = chess.WHITE
-        self.engine = chess.engine.SimpleEngine.popen_uci(r"./stockfish-windows-x86-64-avx2.exe")
-        self.tactics_engine = TacticsEngine(r"./stockfish-windows-x86-64-avx2.exe", self.board, self.tactics_engine_turn)
-        self.tactic_stack = []
-        self.tactic_count = 0
-
     def play_tactic_game(self):
-        while not self.board.is_game_over():
-            if TacticSearch.relative_pin(self.board) or TacticSearch.absolute_pin(self.board) or TacticSearch.fork(self.board):
+        self.tactic_count = 0
+        board = chess.Board()
+        tactics_engine_turn = chess.WHITE
+        tactics_engine = TacticsEngine(r"./stockfish-windows-x86-64-avx2.exe", board, tactics_engine_turn)
+        engine = chess.engine.SimpleEngine.popen_uci(r"./stockfish-windows-x86-64-avx2.exe")
+        tactic_stack = []
+
+        while not board.is_game_over():
+            if TacticSearch.relative_pin(board) or TacticSearch.absolute_pin(board) or TacticSearch.fork(board):
                     print("Tactic Found")
                     self.tactic_count += 1
 
-            if self.tactics_engine_turn:
-                if len(self.tactic_stack) >= 2:
-                    expected_move = self.tactic_stack.pop()
-                    if self.board.peek() != expected_move:
-                        self.tactic_stack = self.tactics_engine.play_move()
+            if tactics_engine_turn:
+                if len(tactic_stack) >= 2:
+                    expected_move = tactic_stack.pop()
+                    if board.peek() != expected_move:
+                        tactic_stack = tactics_engine.play_move()
                 else:
-                    self.tactic_stack = self.tactics_engine.play_move()
+                    tactic_stack = tactics_engine.play_move()
 
-                move = self.tactic_stack.pop()
-                self.board.push(move)
+                move = tactic_stack.pop()
+                board.push(move)
+                print(move)
             else:
-                result = self.engine.play(self.board, chess.engine.Limit(time=1.0, depth=8))
-                self.board.push(result.move)
+                result = engine.play(board, chess.engine.Limit(time=1.0, depth=8))
+                board.push(result.move)
+                print(result.move)
 
-            self.tactics_engine_turn = not self.tactics_engine_turn
+            tactics_engine_turn = not tactics_engine_turn
 
-        print(self.board.result())
-        self.close()
+        print(board.result())
+        tactics_engine.close()
+        engine.quit()
 
     def play_normal_game(self):
-        while not self.board.is_game_over():
-            if TacticSearch.relative_pin(self.board) or TacticSearch.absolute_pin(self.board) or TacticSearch.fork(self.board):
+        self.tactic_count = 0
+        board = chess.Board()
+        engine = chess.engine.SimpleEngine.popen_uci(r"./stockfish-windows-x86-64-avx2.exe")
+
+        while not board.is_game_over():
+            if TacticSearch.relative_pin(board) or TacticSearch.absolute_pin(board) or TacticSearch.fork(board):
                 print("Tactic Found")
                 self.tactic_count += 1
 
-            result = self.engine.play(self.board, chess.engine.Limit(time=1.0, depth=12))
-            self.board.push(result.move)
+            result = engine.play(board, chess.engine.Limit(time=1.0, depth=12))
+            board.push(result.move)
+            print(result.move)
 
-        print(self.board.result())
-        self.close()
-
-    def close(self):
-        self.engine.quit()
-        self.tactics_engine.close()
+        print(board.result())
+        engine.quit()
 
 if __name__ == "__main__":
     evaluation = Evaluation()
     evaluation.play_normal_game()
-    print("Tactic Count: ", evaluation.tactic_count)
-
-
-        
+    normal_tactic_count = evaluation.tactic_count
+    evaluation.play_tactic_game()
+    modified_tactic_count = evaluation.tactic_count
+    print(f"Normal Tactic Count: {normal_tactic_count}")
+    print(f"Modified Tactic Count: {modified_tactic_count}")

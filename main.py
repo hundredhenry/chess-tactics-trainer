@@ -160,13 +160,14 @@ class ChessGame:
         elif outcome.winner == (not self.player_colour):
             text = font.render('You Lost', True, (0, 0, 0))
         else:
-            draw_messages = {
-                chess.Termination.STALEMATE: 'Draw: Stalemate',
-                chess.Termination.FIFTY_MOVES: 'Draw: Fifty Move Rule',
-                chess.Termination.THREEFOLD_REPETITION: 'Draw: Threefold Repetition',
-                chess.Termination.INSUFFICIENT_MATERIAL: 'Draw: Insufficient Material'
-            }
-            text = font.render(draw_messages.get(outcome.termination, 'Draw'), True, (0, 0, 0))
+            if outcome.termination == chess.Termination.STALEMATE:
+                text = font.render('Draw: Stalemate', True, (255, 255, 255))
+            elif outcome.termination == chess.Termination.FIFTY_MOVES:
+                text = font.render('Draw: Fifty Move Rule', True, (255, 255, 255))
+            elif outcome.termination == chess.Termination.THREEFOLD_REPETITION:
+                text = font.render('Draw: Threefold Repetition', True, (255, 255, 255))
+            elif outcome.termination == chess.Termination.INSUFFICIENT_MATERIAL:
+                text = font.render('Draw: Insufficient Material', True, (255, 255, 255))
 
         text_rect = text.get_rect()
         text_rect.center = (self.width // 2, self.height // 2)
