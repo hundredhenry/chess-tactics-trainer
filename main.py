@@ -65,6 +65,10 @@ class ChessGame:
         else:
             self.player_colour = value
 
+    def set_difficulty(self, tuple: tuple, value: int) -> None:
+        # Set the engine difficulty to the selected value
+        self.engine.set_difficulty(value)
+
     def draw_piece(self, piece: chess.Piece, x: int, y: int) -> None:
         # Get the image for the piece
         piece_image = self.images[self.piece_symbols[piece.symbol()]]
@@ -153,7 +157,7 @@ class ChessGame:
         self.window.blit(text, text_rect)
 
     def display_game_over(self, outcome: chess.Outcome) -> None:
-        font = pygame.font.Font('freesansbold.ttf', 32)
+        font = pygame.font.Font('freesansbold.ttf', 42)
         
         if outcome.winner == self.player_colour:
             text = font.render('You Won', True, (0, 0, 0))
@@ -223,8 +227,6 @@ class ChessGame:
 
     def run(self) -> None:
         running = True
-        self.init_board()
-        self.init_engine()
         self.update_board()
 
         # UI elements
@@ -297,8 +299,7 @@ class ChessGame:
                     elif event.ui_element == reset_button:
                         self.init_board()
                         # Reinitialize the engine
-                        self.engine.close()
-                        self.init_engine()
+                        self.engine.reset_engine(self.board)
                         self.engine.current_tactic = None
                         self.update_board()
                     # Return to the main menu
@@ -316,20 +317,31 @@ class ChessGame:
 
     def menu(self) -> None:
         running = True
+        # Initialize the board and engine
+        self.init_board()
+        self.init_engine()
         # Create the menus
         main_menu = pygame_menu.Menu('Chess Tactics Trainer', self.width, self.height, theme=pygame_menu.themes.THEME_DEFAULT)
-        game_menu = pygame_menu.Menu('Start Game', self.width, self.height, theme=pygame_menu.themes.THEME_DEFAULT)
+
+        game_menu = pygame_menu.Menu('Game Configuration', self.width, self.height, theme=pygame_menu.themes.THEME_DEFAULT)
         settings_menu = pygame_menu.Menu('Settings', self.width, self.height, theme=pygame_menu.themes.THEME_DEFAULT)
 
         # Main menu buttons
-        main_menu.add.button('Start', game_menu)
-        main_menu.add.button('Settings', settings_menu)
-        main_menu.add.button('Quit', pygame_menu.events.EXIT)
+        main_menu.add.button('Start', game_menu, align=pygame_menu.locals.ALIGN_LEFT, font_size=64, margin=(50, 50), 
+                             selection_effect=None)
+        main_menu.add.button('Settings', settings_menu, align=pygame_menu.locals.ALIGN_LEFT, font_size=64, margin=(50, 50), 
+                             selection_effect=None)
+        main_menu.add.button('Quit', pygame_menu.events.EXIT, align=pygame_menu.locals.ALIGN_LEFT, font_size=64, margin=(50, 50),
+                             selection_effect=None)
 
         # Game settings menu buttons
         game_menu.add.selector('Player Colour:', [('White', chess.WHITE), ('Black', chess.BLACK), ('Random', -1)], default=0,
-                               onchange=self.set_player_colour, style=pygame_menu.widgets.SELECTOR_STYLE_FANCY)
-        game_menu.add.button('Start Game', self.run)
+                               onchange=self.set_player_colour, style=pygame_menu.widgets.SELECTOR_STYLE_FANCY, 
+                               align=pygame_menu.locals.ALIGN_RIGHT, font_size=56, margin=(-75, 25), selection_effect=None)
+        game_menu.add.selector('Difficulty:', [('Easy', 1), ('Medium', 2), ('Hard', 3)], default=1, 
+                               onchange=self.set_difficulty, style=pygame_menu.widgets.SELECTOR_STYLE_FANCY,
+                               align=pygame_menu.locals.ALIGN_RIGHT, font_size=56, margin=(-75, 25), selection_effect=None)
+        game_menu.add.button('Start Game', self.run, font_size=64, margin=(0, 50), selection_effect=None)
         
         while running:
             events = pygame.event.get()

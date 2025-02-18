@@ -37,13 +37,26 @@ class Tactic:
 class TacticsEngine:
     def __init__(self, engine_path: str, board: chess.Board, engine_colour: chess.Color) -> None:
         self.board = board
-        self.engine = chess.engine.SimpleEngine.popen_uci(engine_path)
+        self.engine_path = engine_path
+        self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
         self.engine_colour = engine_colour
-        self.pv = 5
+        self.current_tactic = None
         self.default_depth = 10
         self.search_depth = self.default_depth
-        self.current_tactic = None
         self.tactic_cache = {}
+
+    def set_difficulty(self, value: int) -> None:
+        if value == 0:
+            self.pv = 10
+            self.engine_depth = 6
+        elif value == 1:
+            self.pv = 5
+            self.engine_depth = 10
+        else:
+            self.pv = 3
+            self.engine_depth = 15
+
+        self.limit = chess.engine.Limit(time=5.0, depth=self.engine_depth)
 
     def play_move(self) -> chess.Move:
         if self.current_tactic:
@@ -55,25 +68,36 @@ class TacticsEngine:
                 self.tactic_cache[self.board.fullmove_number] = self.current_tactic
                 self.current_tactic = None
 
-        self.start_tactic_search()
-        if self.current_tactic:
-            self.search_depth = min(self.default_depth, self.search_depth - 2)
-            return self.current_tactic.next_move()
-        
-        self.search_depth += 1
-        limit = chess.engine.Limit(time=5.0, depth=12)
-        analysis = self.engine.analyse(self.board, limit, multipv=self.pv)
+        analysis = self.engine.analyse(self.board, self.limit, multipv=self.pv)
         # Starts with the best move
         current_move = analysis[0]["pv"][0]
-
+        best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
+        # Checkmate line for engine
+        if best_score > 5000:
+            return analysis[0]["pv"][0]
+        
+        # Check if there is a second best move
+        if len(analysis) == 1:
+            return current_move
+        else:
+            second_score = analysis[1]["score"].pov(self.engine_colour).score(mate_score=100000)
+        
+        # Check if best move is significantly better
+        if best_score >= second_score + 300:
+            return current_move
+        else:
+            self.start_tactic_search()
+            if self.current_tactic:
+                self.search_depth = min(self.default_depth, self.search_depth - 2)
+                return self.current_tactic.next_move()
+            else:
+                self.search_depth += 1
+        
+        # Find the least winning move
         for infodict in analysis[1:]:
             pv = infodict["pv"]
             score = infodict["score"].pov(self.engine_colour).score(mate_score=100000)
-            
-            if score > 300:
-                current_move = pv[0]
-                break
-            elif score < 0:
+            if score < 0:
                 break
             else:
                 current_move = pv[0]
@@ -87,19 +111,18 @@ class TacticsEngine:
             self.current_tactic = None
 
     def start_tactic_search(self) -> None:
-        limit = chess.engine.Limit(time=5.0, depth=12)
-        self.tactic_search(self.board, limit, self.search_depth)
+        self.tactic_search(self.board, self.search_depth)
     
-    def tactic_search(self, board: chess.Board, limit: chess.engine.Limit, search_depth: int) -> list:
+    def tactic_search(self, board: chess.Board, search_depth: int) -> list:
         # Base case for search depth
         if search_depth == 0 or board.is_game_over():
             return []
 
         # Generate principal variations for the current position
         min_pv = min(board.legal_moves.count(), self.pv)
-        analysis = self.engine.analyse(board, limit, multipv=min_pv)
+        analysis = self.engine.analyse(board, self.limit, multipv=min_pv)
         if board.turn != self.engine_colour:
-            return self.play_human_move(analysis, board, limit, search_depth)
+            return self.play_human_move(analysis, board, search_depth)
         
         best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
         # Checkmate line for human
@@ -121,30 +144,29 @@ class TacticsEngine:
             # If no tactic is found in initial PV, play moves above a score cutoff to search for tactics
             if score >= best_score - 30:
                 board.push(pv[0])
-                movestack = self.tactic_search(board, limit, search_depth - 1)
+                movestack = self.tactic_search(board, search_depth - 1)
                 board.pop()
                 if movestack:
                     return [pv[0]] + movestack
 
         return []
     
-    def play_human_move(self, analysis: dict, board: chess.Board, limit: chess.engine.Limit, search_depth: int) -> list:
+    def play_human_move(self, analysis: dict, board: chess.Board, search_depth: int) -> list:
         best_score = analysis[0]["score"].pov(board.turn).score(mate_score=100000)
-        if len(analysis) >= 2:
-            second_score = analysis[1]["score"].pov(board.turn).score(mate_score=100000)
-        else:
-            second_score = -9999
-
         # Return PV if checkmate line for human
         if best_score > 5000:
             self.current_tactic = Tactic(analysis[0]["pv"], TACTIC_TYPES["Checkmate"])
             return analysis[0]["pv"]
 
+        # Check if there is a second best move
+        if len(analysis) >= 2:
+            second_score = analysis[1]["score"].pov(board.turn).score(mate_score=100000)
+
         # Check if best move is significantly better
         if len(analysis) == 1 or best_score >= second_score + 200:
             best_move = analysis[0]["pv"][0]
             board.push(best_move)
-            tactic_moves = self.tactic_search(board, limit, search_depth - 1)
+            tactic_moves = self.tactic_search(board, self.limit, search_depth - 1)
             board.pop()
             if tactic_moves:
                 return [best_move] + tactic_moves
@@ -168,6 +190,14 @@ class TacticsEngine:
                     return index, TACTIC_TYPES["Relative Pin"]
 
         return -1, -1
+    
+    def reset_engine(self, board: chess.Board) -> None:
+        self.engine.quit()
+        self.board = board
+        self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
+        self.current_tactic = None
+        self.search_depth = self.default_depth
+        self.tactic_cache.clear()
 
     def close(self) -> None:
         self.engine.quit()
