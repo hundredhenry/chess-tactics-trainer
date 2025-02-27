@@ -163,7 +163,7 @@ class ChessGame:
         self.draw()
 
     def display_tactic_text(self) -> None:
-        font = pygame.font.Font('freesansbold.ttf', 16)
+        font = pygame.font.Font('freesansbold.ttf', 14)
         num_moves = self.engine.current_tactic.moves_left()
         tactic_messages = {
             TACTIC_TYPES['Checkmate']: 'Mate in {num_moves} moves',
@@ -248,12 +248,12 @@ class ChessGame:
         if not self.engine.current_tactic:
             self.engine.tactic_search()
 
-    def run(self, puzzles: list[Puzzle] = None) -> None:
+    def run(self, puzzle_mode = False) -> None:
         running = True
         # Initialize the board and engine
-        if puzzles:
-            self.init_board(puzzles[0].fen)
-            self.board.push(puzzles[0].moves[0])
+        if puzzle_mode:
+            self.init_board(self.puzzles[0].fen)
+            self.board.push(self.puzzles[0].moves[0])
             self.player_colour = self.board.turn
             self.puzzle_index = 0
         else:
@@ -274,14 +274,14 @@ class ChessGame:
                                                     text='Reset', manager=manager)
         menu_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((7 * self.square_size, self.height - 50, self.square_size, 50)), 
                                                    text='Menu', manager=manager)
-        if puzzles:
+        if puzzle_mode:
             prev_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((5 * self.square_size, self.height - 50, self.square_size, 50)),
                                                         text='Previous', manager=manager)
             next_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((6 * self.square_size, self.height - 50, self.square_size, 50)),
                                                         text='Next', manager=manager)
         pygame.display.update()
 
-        if puzzles:
+        if puzzle_mode:
             self.engine.tactic_search(True)
 
         while running:
@@ -337,32 +337,33 @@ class ChessGame:
                             self.update_board()
                     # Reset board
                     elif event.ui_element == reset_button:
-                        self.init_board()
-                        # Reinitialize the engine
-                        self.engine.reset_engine(self.board, not self.player_colour)
-                        self.update_board()
-                    # Go to the previous puzzle
-                    elif event.ui_element == prev_button:
-                        if self.puzzle_index > 0:
-                            self.puzzle_index -= 1
-                            self.init_board(puzzles[self.puzzle_index].fen)
-                            self.board.push(puzzles[self.puzzle_index].moves[0])
-                            self.player_colour = self.board.turn
+                            self.init_board()
                             # Reinitialize the engine
                             self.engine.reset_engine(self.board, not self.player_colour)
-                            self.engine.tactic_search(True)
                             self.update_board()
-                    # Go to the next puzzle
-                    elif event.ui_element == next_button:
-                        if self.puzzle_index < len(puzzles) - 1:
-                            self.puzzle_index += 1
-                            self.init_board(puzzles[self.puzzle_index].fen)
-                            self.board.push(puzzles[self.puzzle_index].moves[0])
-                            self.player_colour = self.board.turn
-                            # Reinitialize the engine
-                            self.engine.reset_engine(self.board, not self.player_colour)
-                            self.engine.tactic_search(True)
-                            self.update_board()
+                    elif puzzle_mode:
+                        # Go to the previous puzzle
+                        if event.ui_element == prev_button:
+                            if self.puzzle_index > 0:
+                                self.puzzle_index -= 1
+                                self.init_board(puzzles[self.puzzle_index].fen)
+                                self.board.push(puzzles[self.puzzle_index].moves[0])
+                                self.player_colour = self.board.turn
+                                # Reinitialize the engine
+                                self.engine.reset_engine(self.board, not self.player_colour)
+                                self.engine.tactic_search(True)
+                                self.update_board()
+                        # Go to the next puzzle
+                        elif event.ui_element == next_button:
+                            if self.puzzle_index < len(self.puzzles) - 1:
+                                self.puzzle_index += 1
+                                self.init_board(self.puzzles[self.puzzle_index].fen)
+                                self.board.push(self.puzzles[self.puzzle_index].moves[0])
+                                self.player_colour = self.board.turn
+                                # Reinitialize the engine
+                                self.engine.reset_engine(self.board, not self.player_colour)
+                                self.engine.tactic_search(True)
+                                self.update_board()
                     # Return to the main menu
                     elif event.ui_element == menu_button:
                         running = False
@@ -376,16 +377,16 @@ class ChessGame:
             pygame.display.flip()
 
     def puzzle_demo(self) -> None:
-        puzzles = []
+        self.puzzles = []
         # Load the FENs and moves from the puzzles.csv file
         with open('puzzles.csv', 'r') as file:
             lines = file.readlines()
             for line in lines:
                 tactic_type, fen, moves = line.strip().split(',')
                 moves = [chess.Move.from_uci(move) for move in moves.split()]
-                puzzles.append(Puzzle(int(tactic_type), fen, moves))
+                self.puzzles.append(Puzzle(int(tactic_type), fen, moves))
 
-        self.run(puzzles)
+        self.run(True)
         
     def menu(self) -> None:
         running = True
