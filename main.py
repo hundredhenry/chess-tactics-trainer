@@ -407,14 +407,14 @@ class ChessGame:
         # Game settings menu buttons
         game_menu.add.selector('Player Colour:', [('White', chess.WHITE), ('Black', chess.BLACK), ('Random', -1)], default=0,
                                onchange=self.set_player_colour, style=pygame_menu.widgets.SELECTOR_STYLE_FANCY, 
-                               align=pygame_menu.locals.ALIGN_RIGHT, font_size=52, margin=(-75, 25), selection_effect=None)
+                               align=pygame_menu.locals.ALIGN_RIGHT, font_size=40, margin=(-75, 25), selection_effect=None)
         game_menu.add.dropselect_multiple('Tactic Types:', [('Checkmate', TACTIC_TYPES['Checkmate']), ('Fork', TACTIC_TYPES['Fork']), 
                                                            ('Absolute Pin', TACTIC_TYPES['Absolute Pin']), ('Relative Pin', TACTIC_TYPES['Relative Pin'])],
                                         default=[TACTIC_TYPES['Checkmate'], TACTIC_TYPES['Fork'], TACTIC_TYPES['Absolute Pin'], TACTIC_TYPES['Relative Pin']],
-                                        onchange=self.set_tactic_types, align=pygame_menu.locals.ALIGN_RIGHT, font_size=52, margin=(-75, 25), selection_effect=None)
+                                        onchange=self.set_tactic_types, align=pygame_menu.locals.ALIGN_RIGHT, font_size=40, margin=(-75, 25), selection_effect=None)
         game_menu.add.selector('Difficulty:', [('Easy', 1), ('Medium', 2), ('Hard', 3)], default=1, 
                                onchange=self.set_difficulty, style=pygame_menu.widgets.SELECTOR_STYLE_FANCY,
-                               align=pygame_menu.locals.ALIGN_RIGHT, font_size=52, margin=(-75, 25), selection_effect=None)
+                               align=pygame_menu.locals.ALIGN_RIGHT, font_size=40, margin=(-75, 25), selection_effect=None)
         game_menu.add.button('Start Game', self.run, font_size=64, margin=(0, 50), selection_effect=None)
         
         while running:
