@@ -9,8 +9,8 @@ class Evaluation:
         board = chess.Board()
         tactics_engine_turn = chess.WHITE
         tactics_engine = TacticsEngine(r"./stockfish-windows-x86-64-avx2.exe", board, tactics_engine_turn)
+        tactics_engine.set_difficulty(2)
         engine = chess.engine.SimpleEngine.popen_uci(r"./stockfish-windows-x86-64-avx2.exe")
-        tactic_stack = []
 
         while not board.is_game_over():
             if TacticSearch.relative_pin(board) or TacticSearch.absolute_pin(board) or TacticSearch.fork(board):
@@ -18,14 +18,7 @@ class Evaluation:
                     self.tactic_count += 1
 
             if tactics_engine_turn:
-                if len(tactic_stack) >= 2:
-                    expected_move = tactic_stack.pop()
-                    if board.peek() != expected_move:
-                        tactic_stack = tactics_engine.play_move()
-                else:
-                    tactic_stack = tactics_engine.play_move()
-
-                move = tactic_stack.pop()
+                move = tactics_engine.play_move()
                 board.push(move)
                 print(move)
             else:
@@ -49,7 +42,11 @@ class Evaluation:
                 print("Tactic Found")
                 self.tactic_count += 1
 
-            result = engine.play(board, chess.engine.Limit(time=1.0, depth=12))
+            if chess.WHITE:
+                result = engine.play(board, chess.engine.Limit(time=1.0, depth=15))
+            else:
+                result = engine.play(board, chess.engine.Limit(time=1.0, depth=8))
+
             board.push(result.move)
             print(result.move)
 
