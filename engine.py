@@ -32,7 +32,7 @@ class Tactic:
         return self.pv[self.index]
     
     def moves_left(self) -> int:
-        return (len(self.pv) - 1 - self.index) // 2 + 1
+        return ((len(self.pv) - 1 - self.index) // 2) + 1
 
 class TacticsEngine:
     def __init__(self, engine_path: str, board: chess.Board, engine_colour: chess.Color) -> None:

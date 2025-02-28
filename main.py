@@ -1,66 +1,87 @@
 # Modules
 import os
+import random
 import pygame
 import pygame_gui
 import pygame_menu
 import chess
-import random
+from dataclasses import dataclass
 from engine import TacticsEngine,  TACTIC_TYPES
 
-SQUARE = [pygame.Color(240, 217, 181), pygame.Color(181, 136, 99)]
-HIGHLIGHT_MOVE = pygame.Color(115, 130, 85, 128)
-HIGHLIGHT_PIECE = pygame.Color(115, 130, 85, 255)
-LAST_MOVE = pygame.Color(189, 186, 83, 128)
-CAPTURE = pygame.Color(204, 0, 0, 128)
-HINT = pygame.Color(49, 120, 115, 128)
+# Colors for board and highlights
+COLOURS = {
+    'LIGHT_SQUARE': pygame.Color(240, 217, 181),
+    'DARK_SQUARE': pygame.Color(181, 136, 99),
+    'HIGHLIGHT_MOVE': pygame.Color(115, 130, 85, 128),
+    'HIGHLIGHT_PIECE': pygame.Color(115, 130, 85, 255),
+    'LAST_MOVE': pygame.Color(189, 186, 83, 128),
+    'CAPTURE': pygame.Color(204, 0, 0, 128),
+    'HINT': pygame.Color(49, 120, 115, 128),
+    'BACKGROUND': pygame.Color(66, 69, 73),
+    'TEXT': pygame.Color(255, 255, 255),
+    'GAME_OVER_TEXT': pygame.Color(0, 0, 0)
+}
 
+ENGINE_PATH = "./stockfish-windows-x86-64-avx2.exe"
+
+@dataclass
 class Puzzle:
-    def __init__(self, tactic_type: int, fen: str, moves: list[chess.Move]) -> None:
-        self.tactic_type = tactic_type
-        self.fen = fen
-        self.moves = moves
+    """Represents a chess puzzle with a position and solution moves."""
+    tactic_type: int
+    fen: str
+    moves: list[chess.Move]
 
 class ChessGame:
+    """Class to represent the chess game and handle the game logic."""
+
     def __init__(self) -> None:
-        self.init_display()
-
-    def init_display(self) -> None:
+        """Initialize the game display and default settings."""
         pygame.init()
-        info = pygame.display.Info()
+        self._setup_display()
+        self._load_assets()
+        self._init_game_settings()
 
-        self.width, self.height = info.current_h - 150, info.current_h - 100
+    def _setup_display(self):
+        """Configure the game window and display properties."""
+        info = pygame.display.Info()
+        self.width = info.current_h - 150
+        self.height = info.current_h - 100
         self.square_size = self.width // 8
         self.window = pygame.display.set_mode((self.width, self.height))
-        self.timer = pygame.time.Clock()
+        pygame.display.set_caption('Chess Tactics Trainer')
+
+    def _load_assets(self):
+        """Load game assets like pieces, images, and sounds."""
+        # Piece symbol mapping for image loading
         self.piece_symbols = {
-            'P': 'wp', 'p': 'bp', 'R': 'wr', 'r': 'br', 'N': 'wn', 'n': 'bn',
-            'B': 'wb', 'b': 'bb', 'Q': 'wq', 'q': 'bq', 'K': 'wk', 'k': 'bk'}
-        self.images = self.load_images()
-        self.sounds = self.load_sounds()
+            'P': 'wp', 'p': 'bp', 'R': 'wr', 'r': 'br',
+            'N': 'wn', 'n': 'bn', 'B': 'wb', 'b': 'bb',
+            'Q': 'wq', 'q': 'bq', 'K': 'wk', 'k': 'bk'
+        }
+        
+        # Load piece images and sounds
+        self.images = self._load_images()
+        self.sounds = self._load_sounds()
+        
+        # Set window icon
+        if 'bk' in self.images and self.images['bk']:
+            pygame.display.set_icon(self.images['bk'])
+
+    def _init_game_settings(self):
+        """Initialize default game settings."""
         self.player_colour = chess.WHITE
         self.difficulty = 2
-        self.tactic_types = [0, 1, 2, 3]
+        self.tactic_types = list(TACTIC_TYPES.values())  # All tactic types enabled by default
+        self.board = None
+        self.engine = None
 
-        pygame.display.set_caption('Chess Tactics Trainer')
-        pygame.display.set_icon(self.images['bk'])
-
-    def init_board(self, fen: str = chess.STARTING_FEN) -> None:
-        self.board = chess.Board(fen)
-        self.selected_piece = None
-        self.highlight_hint = False
-        self.hint_move = None
-    
-    def init_engine(self, difficulty: int, tactic_types: list[int]) -> None:
-        self.engine_path = r"./stockfish-windows-x86-64-avx2.exe"
-        self.engine = TacticsEngine(self.engine_path, self.board, not self.player_colour)
-        self.engine.set_difficulty(difficulty)
-        self.engine.set_tactic_types(tactic_types)
-
-    def load_images(self) -> dict:
+    def _load_images(self) -> dict:
+        """Load chess piece images from file."""
         images = {}
         for symbol in self.piece_symbols.values():
             try:
-                image = pygame.image.load(os.path.join('images', f'{symbol}.png'))
+                image_path = os.path.join('images', f'{symbol}.png')
+                image = pygame.image.load(image_path)
                 scaled_image = pygame.transform.smoothscale(image, (self.square_size, self.square_size))
                 images[symbol] = scaled_image
             except pygame.error as e:
@@ -69,135 +90,173 @@ class ChessGame:
 
         return images
     
-    def load_sounds(self) -> None:
-        sounds = {
+    def _load_sounds(self) -> dict:
+        """Load chess move sound effects."""
+        return {
             'move_check': pygame.mixer.Sound('sounds/move-check.mp3'),
             'capture': pygame.mixer.Sound('sounds/capture.mp3'),
             'promote': pygame.mixer.Sound('sounds/promote.mp3'),
             'move_self': pygame.mixer.Sound('sounds/move-self.mp3')
         }
-        return sounds
+
+    def _init_board(self, fen: str = chess.STARTING_FEN) -> None:
+        """Initialize the chess board with the given FEN position."""
+        self.board = chess.Board(fen)
+        self.selected_piece = None
+        self.highlight_hint = False
+        self.hint_move = None
     
-    def set_player_colour(self, selection: tuple, value: int) -> None:
-        # Set the player colour to the selected value, or randomly if 'Random' is selected
+    def _init_engine(self, difficulty: int, tactic_types: list[int]) -> None:
+        """Initialize the chess engine with specified difficulty and tactic types."""
+        self.engine = TacticsEngine(ENGINE_PATH, self.board, not self.player_colour)
+        self.engine.set_difficulty(difficulty)
+        self.engine.set_tactic_types(tactic_types)
+    
+    def _set_player_colour(self, selection: tuple, value: int) -> None:
+        """Set the player's color (white, black, or random)."""
         if selection[0][0] == 'Random':
             self.player_colour = random.choice([chess.WHITE, chess.BLACK])
         else:
             self.player_colour = value
 
-    def set_difficulty(self, selection: tuple, value: int) -> None:
-        # Set the difficulty to the selected value
+    def _set_difficulty(self, _, value: int) -> None:
+        """Set the game difficulty."""
         self.difficulty = value
 
-    def set_tactic_types(self, value: list[int]) -> None:
-        # Set the tactic types to the selected values
+    def _set_tactic_types(self, value: list[int]) -> None:
+        """Set the types of tactics to practice."""
         self.tactic_types = value[-1]
 
-    def draw_piece(self, piece: chess.Piece, x: int, y: int) -> None:
-        # Draw the piece on the board
+    def _draw_piece(self, piece: chess.Piece, x: int, y: int) -> None:
+        """Draw a chess piece on the board."""
         piece_image = self.images.get(self.piece_symbols[piece.symbol()])
         if piece_image:
             self.window.blit(piece_image, pygame.Rect(x, y, self.square_size, self.square_size))
 
-    def highlight_square(self, x: int, y: int, colour: pygame.Color) -> None:
-        # Highlight the square with the specified colour
+    def _highlight_square(self, x: int, y: int, colour: pygame.Color) -> None:
+        """Highlight a square with the specified color."""
         board_surface = pygame.Surface((self.square_size, self.square_size), pygame.SRCALPHA)
         board_surface.fill(colour)
         self.window.blit(board_surface, pygame.Rect(x, y, self.square_size, self.square_size))
             
-    def highlight_logic(self, square: chess.Square, move: chess.Move, x: int, y: int) -> None:
+    def _apply_highlighting(self, square: chess.Square, move: chess.Move, x: int, y: int) -> None:
+        """Apply appropriate highlighting to squares based on game state."""    
+        # Hint highlighting has top priority
         if self.hint_move != None and square == self.hint_move.to_square:
-            self.highlight_square(x, y, HINT)
+            self._highlight_square(x, y, COLOURS['HINT'])
             return
 
+        # Selected piece highlighting
         if square == self.selected_piece:
-            self.highlight_square(x, y, HIGHLIGHT_PIECE)
+            self._highlight_square(x, y, COLOURS['HIGHLIGHT_PIECE'])
             return
         
+        # Move highlighting
         if move:
-            if self.board.is_capture(move):
-                self.highlight_square(x, y, CAPTURE)
-            else:
-                self.highlight_square(x, y, HIGHLIGHT_MOVE)
+            highlight_color = COLOURS['CAPTURE'] if self.board.is_capture(move) else COLOURS['HIGHLIGHT_MOVE']
+            self._highlight_square(x, y, highlight_color)
             return
         
+        # Check highlighting
         if self.board.is_check() and square == self.board.king(self.board.turn):
-            self.highlight_square(x, y, CAPTURE)
+            self._highlight_square(x, y, COLOURS['CAPTURE'])
             return
 
+        # Last move highlighting
         if self.board.move_stack:
             last_move = self.board.peek()
             if last_move and square in (last_move.from_square, last_move.to_square):
-                self.highlight_square(x, y, LAST_MOVE)
+                self._highlight_square(x, y, COLOURS['LAST_MOVE'])
 
-    def draw(self) -> None:
+    def _draw_board(self) -> None:
+        """Draw the complete chess board with pieces and highlights."""
+        # Update hint move if available
         if self.highlight_hint and self.engine.current_tactic.moves_left() > 0:
             self.hint_move = self.engine.current_tactic.hint_move()
             self.selected_piece = self.hint_move.from_square
         else:
             self.hint_move = None
 
+        # Get legal moves for selected piece
         legal_moves = {}
         if self.selected_piece is not None:
-            legal_moves = {move.to_square: move for move in self.board.legal_moves if move.from_square == self.selected_piece}
+            legal_moves = {
+                move.to_square: move for move in self.board.legal_moves 
+                if move.from_square == self.selected_piece
+            }
 
+        # Draw the board and pieces
         for row in range(8):
             for col in range(8):
-                # Flip row if playing as black
+                # Adjust coordinates based on player color perspective
                 visual_row = 7 - row if self.player_colour == chess.WHITE else row
                 visual_col = col if self.player_colour == chess.WHITE else 7 - col
+
+                # Get square information
                 square = chess.square(visual_col, visual_row)
-                colour = SQUARE[(visual_row + visual_col) % 2]
-                x, y = col * self.square_size, row * self.square_size
+                square_color = COLOURS['LIGHT_SQUARE'] if (visual_row + visual_col) % 2 == 0 else COLOURS['DARK_SQUARE']
+                square_x, square_y = col * self.square_size, row * self.square_size
+
+                # Draw square
+                pygame.draw.rect(
+                    self.window, 
+                    square_color, 
+                    pygame.Rect(square_x, square_y, self.square_size, self.square_size)
+                )
+
+                # Apply highlighting
+                move = legal_moves.get(square)
+                self._apply_highlighting(square, move, square_x, square_y)
+
+                # Draw piece if present
                 piece = self.board.piece_at(square)
-                pygame.draw.rect(self.window, colour, pygame.Rect(x, y, self.square_size, self.square_size))
-
-                move = legal_moves.get(square, None)
-                self.highlight_logic(square, move, x, y)
                 if piece:
-                    self.draw_piece(piece, x, y)
+                    self._draw_piece(piece, square_x, square_y)
                     
-    def update_board(self) -> None:
+    def _update_board(self) -> None:
         # Clear window and redraw the board
-        self.window.fill((66,69,73))
-        self.draw()
+        self.window.fill(COLOURS['BACKGROUND'])
+        self._draw_board()
 
-    def display_tactic_text(self) -> None:
+    def _display_tactic_text(self) -> None:
+        """Display the current tactic message on the screen."""
         font = pygame.font.Font('freesansbold.ttf', 14)
         num_moves = self.engine.current_tactic.moves_left()
         tactic_messages = {
-            TACTIC_TYPES['Checkmate']: 'Mate in {num_moves} moves',
-            TACTIC_TYPES['Fork']: 'Fork in {num_moves} moves',
-            TACTIC_TYPES['Absolute Pin']: 'Absolute Pin in {num_moves} moves',
-            TACTIC_TYPES['Relative Pin']: 'Relative Pin in {num_moves} moves'
+            TACTIC_TYPES['Checkmate']: f'Mate in {num_moves} moves',
+            TACTIC_TYPES['Fork']: f'Fork in {num_moves} moves',
+            TACTIC_TYPES['Absolute Pin']: f'Absolute Pin in {num_moves} moves',
+            TACTIC_TYPES['Relative Pin']: f'Relative Pin in {num_moves} moves'
         }
-        message = tactic_messages.get(self.engine.current_tactic.type, '').format(num_moves=num_moves)
-        text = font.render(message, True, (255, 255, 255))
-        text_rect = text.get_rect()
-        text_rect.center = (self.square_size, self.height - 25)
+        message = tactic_messages.get(self.engine.current_tactic.type, '')
+        text = font.render(message, True, COLOURS['TEXT'])
+        text_rect = text.get_rect(center=(self.square_size, self.height - 25))
         self.window.blit(text, text_rect)
 
-    def display_game_over(self, outcome: chess.Outcome) -> None:
+    def _display_game_over(self, outcome: chess.Outcome) -> None:
+        """Display game over message with the outcome."""
         font = pygame.font.Font('freesansbold.ttf', 42)
         
         if outcome.winner == self.player_colour:
-            text = font.render('You Won', True, (0, 0, 0))
+            message = 'You Won'
         elif outcome.winner == (not self.player_colour):
-            text = font.render('You Lost', True, (0, 0, 0))
+            message = 'You Lost'
         else:
+            # Draw message based on termination type
             draw_messages = {
                 chess.Termination.STALEMATE: 'Draw: Stalemate',
                 chess.Termination.FIFTY_MOVES: 'Draw: Fifty Move Rule',
                 chess.Termination.THREEFOLD_REPETITION: 'Draw: Threefold Repetition',
                 chess.Termination.INSUFFICIENT_MATERIAL: 'Draw: Insufficient Material'
             }
-            text = font.render(draw_messages.get(outcome.termination, 'Draw'), True, (0, 0, 0))
+            message = draw_messages.get(outcome.termination, 'Draw')
 
-        text_rect = text.get_rect()
-        text_rect.center = (self.width // 2, self.height // 2)
+        text = font.render(message, True, COLOURS["GAME_OVER_TEXT"])
+        text_rect = text.get_rect(center=(self.width // 2, self.height // 2))
         self.window.blit(text, text_rect)
 
-    def play_move_sound(self, move: chess.Move) -> None:
+    def _play_move_sound(self, move: chess.Move) -> None:
+        """Play sound effect based on the move type."""
         if self.board.gives_check(move):
             self.sounds['move_check'].play()
         elif self.board.is_capture(move):
@@ -207,19 +266,30 @@ class ChessGame:
         else:
             self.sounds['move_self'].play()
 
-    def handle_click(self, pos: tuple[int, int]) -> None:
+    def _handle_click(self, pos: tuple[int, int]) -> None:
+        """Handle mouse click on the chess board."""
         x, y = pos
 
         # Check if the click is within the board bounds
-        if x < 0 or x > 8 * self.square_size or y < 0 or y > 8 * self.square_size:
+        if not (0 <= x < 8 * self.square_size and 0 <= y < 8 * self.square_size):
             return
         
-        # Get the row and column of the clicked square
-        col = x // self.square_size if self.player_colour == chess.WHITE else 7 - (x // self.square_size)
-        row = 7 - (y // self.square_size) if self.player_colour == chess.WHITE else y // self.square_size
-        square = chess.square(col, row)
+        # Convert screen coordinates to chess square
+        col = x // self.square_size
+        row = y // self.square_size
+
+        # Adjust for player perspective
+        if self.player_colour == chess.WHITE:
+            col_adjusted = col
+            row_adjusted = 7 - row
+        else:
+            col_adjusted = 7 - col
+            row_adjusted = row
+        
+        square = chess.square(col_adjusted, row_adjusted)
         piece = self.board.piece_at(square)
 
+        # Handle piece selection and move
         if self.selected_piece == None:
             # Select the clicked piece if it is a valid piece
             if piece and piece.color == self.board.turn:
@@ -232,78 +302,178 @@ class ChessGame:
             else:
                 try:
                     move = self.board.find_move(self.selected_piece, square)
-                    self.play_move_sound(move)
+                    self._play_move_sound(move)
                     self.board.push(move)
                     self.selected_piece = None
                     self.hint_move = None
                     self.highlight_hint = False
                 except chess.IllegalMoveError:
+                    # Select a different piece if clicked on another valid piece
                     if piece and piece.color == self.board.turn:
                         self.selected_piece = square
 
-    def make_engine_move(self) -> None:
+    def _make_engine_move(self) -> None:
+        """Make the engine's move and update the board state."""
         move = self.engine.play_move()
-        self.play_move_sound(move)
+        self._play_move_sound(move)
         self.board.push(move)
+
+        # Search for new tactics if the current tactic is completed
         if not self.engine.current_tactic:
             self.engine.tactic_search()
 
-    def run(self, puzzle_mode = False) -> None:
-        running = True
-        # Initialize the board and engine
+    def _handle_undo(self, ui_elements: dict) -> None:
+        """Handle undo button press."""
+        if len(self.board.move_stack) >= 2:
+            # Pop the engine move and the player move before it
+            self.board.pop()
+            self.board.pop()
+            self.selected_piece = None
+            self.highlight_hint = False
+            
+            # Update tactic state
+            if self.engine.current_tactic:
+                self.engine.undo_tactic_move()
+            else:
+                if self.board.fullmove_number in self.engine.tactic_cache:
+                    self.engine.current_tactic = self.engine.tactic_cache[self.board.fullmove_number]
+                    ui_elements["tactic_status"].percent_full = 100
+                else:
+                    self.engine.tactic_search()
+
+            self._update_board()
+
+    def _goto_puzzle(self, index):
+        """Go to the specified puzzle."""
+        if 0 <= index < len(self.puzzles):
+            self.puzzle_index = index
+            self._init_board(self.puzzles[index].fen)
+            self.board.push(self.puzzles[index].moves[0])
+            self.player_colour = self.board.turn
+            
+            # Reset engine for new puzzle
+            self.engine.reset_engine(self.board, not self.player_colour)
+            self.engine.tactic_search(True)
+            self._update_board()
+
+    def _setup_ui(self, puzzle_mode: bool) -> tuple:
+        """Set up UI elements for the game."""
+        manager = pygame_gui.UIManager((self.width, self.height), 'theme.json')
+        ui_elements = {}
+        
+        # Common UI elements
+        ui_elements["tactic_status"] = pygame_gui.elements.UIStatusBar(
+            relative_rect=pygame.Rect((0, self.height - 50, 2 * self.square_size, 50)),
+            manager=manager
+        )
+        
+        ui_elements["hint_button"] = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect((2 * self.square_size, self.height - 50, self.square_size, 50)), 
+            text='Hint', manager=manager
+        )
+        
+        ui_elements["undo_button"] = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect((3 * self.square_size, self.height - 50, self.square_size, 50)), 
+            text='Undo', manager=manager
+        )
+        
+        ui_elements["reset_button"] = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect((4 * self.square_size, self.height - 50, self.square_size, 50)), 
+            text='Reset', manager=manager
+        )
+        
+        ui_elements["menu_button"] = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect((7 * self.square_size, self.height - 50, self.square_size, 50)), 
+            text='Menu', manager=manager
+        )
+        
+        # Puzzle mode specific buttons
         if puzzle_mode:
-            self.init_board(self.puzzles[0].fen)
+            ui_elements["prev_button"] = pygame_gui.elements.UIButton(
+                relative_rect=pygame.Rect((5 * self.square_size, self.height - 50, self.square_size, 50)),
+                text='Previous', manager=manager
+            )
+            
+            ui_elements["next_button"] = pygame_gui.elements.UIButton(
+                relative_rect=pygame.Rect((6 * self.square_size, self.height - 50, self.square_size, 50)),
+                text='Next', manager=manager
+            )
+            
+        pygame.display.update()
+        return manager, ui_elements
+    
+    def _handle_button_click(self, event: pygame.event.Event, ui_elements: dict, puzzle_mode: bool) -> bool:
+        """Handle UI button click events."""
+        # Handle hint
+        if event.ui_element == ui_elements["hint_button"]:
+            if self.engine.current_tactic:
+                self.highlight_hint = True
+                self._update_board()
+        # Handle undo
+        elif event.ui_element == ui_elements["undo_button"]:
+            self._handle_undo(ui_elements)
+        # Handle reset
+        elif event.ui_element == ui_elements["reset_button"]:
+            self._init_board()
+            self.engine.reset_engine(self.board, not self.player_colour)
+            self._update_board()
+        # Handle previous puzzle
+        elif puzzle_mode and event.ui_element == ui_elements["prev_button"]:
+            self._goto_puzzle(self.puzzle_index - 1)
+        # Handle next puzzle
+        elif puzzle_mode and event.ui_element == ui_elements["next_button"]:
+            self._goto_puzzle(self.puzzle_index + 1)
+        # Handle menu
+        elif event.ui_element == ui_elements["menu_button"]:
+            self.engine.close()
+            # Exit game loop
+            return False
+        
+        # Continue game loop
+        return True
+            
+    def _run(self, puzzle_mode = False) -> None:
+        """Run the main game loop."""
+        running = True
+        timer = pygame.time.Clock()
+
+        # Initialize the board and engine based on game mode
+        if puzzle_mode:
+            self._init_board(self.puzzles[0].fen)
             self.board.push(self.puzzles[0].moves[0])
             self.player_colour = self.board.turn
             self.puzzle_index = 0
         else:
-            self.init_board()
+            self._init_board()
 
-        self.init_engine(self.difficulty, self.tactic_types)
-        self.update_board()
+        self._init_engine(self.difficulty, self.tactic_types)
+        self._update_board()
 
-        # UI elements
-        manager = pygame_gui.UIManager((self.width, self.height), 'theme.json')
-        tactic_status = pygame_gui.elements.UIStatusBar(relative_rect=pygame.Rect((0, self.height - 50, 2 * self.square_size, 50)),
-                                                        manager=manager)
-        hint_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((2 * self.square_size, self.height - 50, self.square_size, 50)), 
-                                                   text='Hint', manager=manager)
-        undo_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((3 * self.square_size, self.height - 50, self.square_size, 50)), 
-                                                   text='Undo', manager=manager)
-        reset_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((4 * self.square_size, self.height - 50, self.square_size, 50)), 
-                                                    text='Reset', manager=manager)
-        menu_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((7 * self.square_size, self.height - 50, self.square_size, 50)), 
-                                                   text='Menu', manager=manager)
-        if puzzle_mode:
-            prev_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((5 * self.square_size, self.height - 50, self.square_size, 50)),
-                                                        text='Previous', manager=manager)
-            next_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((6 * self.square_size, self.height - 50, self.square_size, 50)),
-                                                        text='Next', manager=manager)
-        pygame.display.update()
+        manager, ui_elements = self._setup_ui(puzzle_mode)
 
         if puzzle_mode:
             self.engine.tactic_search(True)
 
         while running:
             # Limit the frame rate to 60 FPS
-            time_delta = self.timer.tick(60)
+            time_delta = timer.tick(60)
             manager.update(time_delta)
-            manager.draw_ui(self.window)
+            # Update tactic status display
             if self.engine.current_tactic:
-                self.display_tactic_text()
-                tactic_status.percent_full = 100
+                ui_elements["tactic_status"].percent_full = 100
             else:
-                tactic_status.percent_full = 0
+                ui_elements["tactic_status"].percent_full = 0
 
             # Make the engine move if it is the engine's turn
-            if not self.board.turn == self.player_colour and not self.board.is_game_over():
-                self.make_engine_move()
-                self.update_board()
+            if self.board.turn != self.player_colour and not self.board.is_game_over():
+                self._make_engine_move()
+                self._update_board()
 
+            # Check for game over conditions
             outcome = self.board.outcome()
             if outcome:
                 self.engine.current_tactic = None
-                self.display_game_over(outcome)
+                self._display_game_over(outcome)
             
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -312,71 +482,23 @@ class ChessGame:
                     exit()
                     
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
-                    # Get hint
-                    if event.ui_element == hint_button:
-                        if self.engine.current_tactic:
-                            self.highlight_hint = True
-                            self.update_board()
-                    # Undo move
-                    elif event.ui_element == undo_button:
-                        if len(self.board.move_stack) >= 2:
-                            # Pop the engine move and the player move before it
-                            self.board.pop()
-                            self.board.pop()
-                            self.selected_piece = None
-                            self.highlight_hint = False
-                            if self.engine.current_tactic:
-                                self.engine.undo_tactic_move()
-                            else:
-                                if self.board.fullmove_number in self.engine.tactic_cache:
-                                    self.engine.current_tactic = self.engine.tactic_cache[self.board.fullmove_number]
-                                    tactic_status.percent_full = 100
-                                else:
-                                    self.engine.tactic_search()
-
-                            self.update_board()
-                    # Reset board
-                    elif event.ui_element == reset_button:
-                            self.init_board()
-                            # Reinitialize the engine
-                            self.engine.reset_engine(self.board, not self.player_colour)
-                            self.update_board()
-                    elif puzzle_mode:
-                        # Go to the previous puzzle
-                        if event.ui_element == prev_button:
-                            if self.puzzle_index > 0:
-                                self.puzzle_index -= 1
-                                self.init_board(puzzles[self.puzzle_index].fen)
-                                self.board.push(puzzles[self.puzzle_index].moves[0])
-                                self.player_colour = self.board.turn
-                                # Reinitialize the engine
-                                self.engine.reset_engine(self.board, not self.player_colour)
-                                self.engine.tactic_search(True)
-                                self.update_board()
-                        # Go to the next puzzle
-                        elif event.ui_element == next_button:
-                            if self.puzzle_index < len(self.puzzles) - 1:
-                                self.puzzle_index += 1
-                                self.init_board(self.puzzles[self.puzzle_index].fen)
-                                self.board.push(self.puzzles[self.puzzle_index].moves[0])
-                                self.player_colour = self.board.turn
-                                # Reinitialize the engine
-                                self.engine.reset_engine(self.board, not self.player_colour)
-                                self.engine.tactic_search(True)
-                                self.update_board()
-                    # Return to the main menu
-                    elif event.ui_element == menu_button:
-                        running = False
-                        self.engine.close()
+                    running = self._handle_button_click(event, ui_elements, puzzle_mode)
+                    if not running:
                         break
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    self.handle_click(event.pos)
-                    self.update_board()
+                    self._handle_click(event.pos)
+                    self._update_board()
                 
                 manager.process_events(event)
-            pygame.display.flip()
 
-    def puzzle_demo(self) -> None:
+            manager.draw_ui(self.window)
+            # Display tactic text after UI is drawn so it appears on top
+            if self.engine.current_tactic:
+                self._display_tactic_text()
+                
+            pygame.display.flip()
+            
+    def _puzzle_demo(self) -> None:
         self.puzzles = []
         # Load the FENs and moves from the puzzles.csv file
         with open('puzzles.csv', 'r') as file:
@@ -386,48 +508,111 @@ class ChessGame:
                 moves = [chess.Move.from_uci(move) for move in moves.split()]
                 self.puzzles.append(Puzzle(int(tactic_type), fen, moves))
 
-        self.run(True)
+        self._run(True)
+
+    def _create_menus(self) -> None:
+        """Create the game menus."""
+        menus = {}
         
+        # Create menu instances
+        menus["main"] = pygame_menu.Menu(
+            'Chess Tactics Trainer', 
+            self.width, self.height, 
+            theme=pygame_menu.themes.THEME_DEFAULT
+        )
+        
+        menus["game"] = pygame_menu.Menu(
+            'Game Configuration', 
+            self.width, self.height, 
+            theme=pygame_menu.themes.THEME_DEFAULT
+        )
+        
+        menus["settings"] = pygame_menu.Menu(
+            'Settings', 
+            self.width, self.height, 
+            theme=pygame_menu.themes.THEME_DEFAULT
+        )
+
+        # Main menu options
+        button_style = {
+            'align': pygame_menu.locals.ALIGN_LEFT,
+            'font_size': 64,
+            'margin': (50, 50),
+            'selection_effect': None
+        }
+        
+        menus["main"].add.button('Start', menus["game"], **button_style)
+        menus["main"].add.button('Puzzle Demo', self._puzzle_demo, **button_style)
+        menus["main"].add.button('Settings', menus["settings"], **button_style)
+        menus["main"].add.button('Quit', pygame_menu.events.EXIT, **button_style)
+
+        # Game settings menu
+        game_style = {
+            'align': pygame_menu.locals.ALIGN_RIGHT,
+            'font_size': 40,
+            'margin': (-75, 25),
+            'selection_effect': None
+        }
+        
+        menus["game"].add.selector(
+            'Player Colour:', 
+            [('White', chess.WHITE), ('Black', chess.BLACK), ('Random', -1)],
+            default=0,
+            onchange=self._set_player_colour,
+            style=pygame_menu.widgets.SELECTOR_STYLE_FANCY,
+            **game_style
+        )
+        
+        menus["game"].add.dropselect_multiple(
+            'Tactic Types:', 
+            [
+                ('Checkmate', TACTIC_TYPES['Checkmate']), 
+                ('Fork', TACTIC_TYPES['Fork']), 
+                ('Absolute Pin', TACTIC_TYPES['Absolute Pin']), 
+                ('Relative Pin', TACTIC_TYPES['Relative Pin'])
+            ],
+            default=list(TACTIC_TYPES.values()),
+            onchange=self._set_tactic_types,
+            **game_style
+        )
+        
+        menus["game"].add.selector(
+            'Difficulty:',
+            [('Easy', 1), ('Medium', 2), ('Hard', 3)],
+            default=1,
+            onchange=self._set_difficulty,
+            style=pygame_menu.widgets.SELECTOR_STYLE_FANCY,
+            **game_style
+        )
+        
+        menus["game"].add.button(
+            'Start Game', 
+            self._run, 
+            font_size=64, 
+            margin=(0, 50), 
+            selection_effect=None
+        )
+        
+        return menus
+
     def menu(self) -> None:
+        """Display and handle the main menu."""
         running = True
-        # Create the menus
-        main_menu = pygame_menu.Menu('Chess Tactics Trainer', self.width, self.height, theme=pygame_menu.themes.THEME_DEFAULT)
-        game_menu = pygame_menu.Menu('Game Configuration', self.width, self.height, theme=pygame_menu.themes.THEME_DEFAULT)
-        settings_menu = pygame_menu.Menu('Settings', self.width, self.height, theme=pygame_menu.themes.THEME_DEFAULT)
-
-        # Main menu buttons
-        main_menu.add.button('Start', game_menu, align=pygame_menu.locals.ALIGN_LEFT, font_size=64, margin=(50, 50), 
-                             selection_effect=None)
-        main_menu.add.button('Puzzle Demo', self.puzzle_demo, align=pygame_menu.locals.ALIGN_LEFT, font_size=64, margin=(50, 50),
-                             selection_effect=None)
-        main_menu.add.button('Settings', settings_menu, align=pygame_menu.locals.ALIGN_LEFT, font_size=64, margin=(50, 50), 
-                             selection_effect=None)
-        main_menu.add.button('Quit', pygame_menu.events.EXIT, align=pygame_menu.locals.ALIGN_LEFT, font_size=64, margin=(50, 50),
-                             selection_effect=None)
-
-        # Game settings menu buttons
-        game_menu.add.selector('Player Colour:', [('White', chess.WHITE), ('Black', chess.BLACK), ('Random', -1)], default=0,
-                               onchange=self.set_player_colour, style=pygame_menu.widgets.SELECTOR_STYLE_FANCY, 
-                               align=pygame_menu.locals.ALIGN_RIGHT, font_size=40, margin=(-75, 25), selection_effect=None)
-        game_menu.add.dropselect_multiple('Tactic Types:', [('Checkmate', TACTIC_TYPES['Checkmate']), ('Fork', TACTIC_TYPES['Fork']), 
-                                                           ('Absolute Pin', TACTIC_TYPES['Absolute Pin']), ('Relative Pin', TACTIC_TYPES['Relative Pin'])],
-                                        default=[TACTIC_TYPES['Checkmate'], TACTIC_TYPES['Fork'], TACTIC_TYPES['Absolute Pin'], TACTIC_TYPES['Relative Pin']],
-                                        onchange=self.set_tactic_types, align=pygame_menu.locals.ALIGN_RIGHT, font_size=40, margin=(-75, 25), selection_effect=None)
-        game_menu.add.selector('Difficulty:', [('Easy', 1), ('Medium', 2), ('Hard', 3)], default=1, 
-                               onchange=self.set_difficulty, style=pygame_menu.widgets.SELECTOR_STYLE_FANCY,
-                               align=pygame_menu.locals.ALIGN_RIGHT, font_size=40, margin=(-75, 25), selection_effect=None)
-        game_menu.add.button('Start Game', self.run, font_size=64, margin=(0, 50), selection_effect=None)
         
+        # Create menus
+        menus = self._create_menus()
+        
+        # Main menu loop
         while running:
             events = pygame.event.get()
-
             for event in events:
                 if event.type == pygame.QUIT:
                     running = False
                     break
 
-            main_menu.update(events)
-            main_menu.draw(self.window)
+            # Update and draw the main menu
+            menus["main"].update(events)
+            menus["main"].draw(self.window)
             pygame.display.flip()
 
         pygame.quit()
