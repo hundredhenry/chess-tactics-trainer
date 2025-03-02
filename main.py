@@ -22,7 +22,7 @@ COLOURS = {
     'GAME_OVER_TEXT': pygame.Color(0, 0, 0)
 }
 
-ENGINE_PATH = "./stockfish-windows-x86-64-avx2.exe"
+ENGINE_PATH = './stockfish-windows-x86-64-avx2.exe'
 
 @dataclass
 class Puzzle:
@@ -37,18 +37,23 @@ class ChessGame:
     def __init__(self) -> None:
         """Initialize the game display and default settings."""
         pygame.init()
-        self._setup_display()
-        self._load_assets()
-        self._init_game_settings()
-
-    def _setup_display(self):
-        """Configure the game window and display properties."""
         info = pygame.display.Info()
         self.width = info.current_h - 150
         self.height = info.current_h - 100
         self.square_size = self.width // 8
-        self.window = pygame.display.set_mode((self.width, self.height))
+
+        self._load_assets()
+        self._setup_display()
+        self._init_game_settings()
+
+    def _setup_display(self):
+        """Configure the game window and display properties."""
+        # Set window icon
         pygame.display.set_caption('Chess Tactics Trainer')
+        icon = pygame.transform.smoothscale(self.images['bk'], (32, 32))
+        pygame.display.set_icon(icon)
+        # Set window size and display
+        self.window = pygame.display.set_mode((self.width, self.height))
 
     def _load_assets(self):
         """Load game assets like pieces, images, and sounds."""
@@ -63,10 +68,6 @@ class ChessGame:
         self.images = self._load_images()
         self.sounds = self._load_sounds()
         
-        # Set window icon
-        if 'bk' in self.images and self.images['bk']:
-            pygame.display.set_icon(self.images['bk'])
-
     def _init_game_settings(self):
         """Initialize default game settings."""
         self.player_colour = chess.WHITE
@@ -251,7 +252,7 @@ class ChessGame:
             }
             message = draw_messages.get(outcome.termination, 'Draw')
 
-        text = font.render(message, True, COLOURS["GAME_OVER_TEXT"])
+        text = font.render(message, True, COLOURS['GAME_OVER_TEXT'])
         text_rect = text.get_rect(center=(self.width // 2, self.height // 2))
         self.window.blit(text, text_rect)
 
@@ -337,7 +338,7 @@ class ChessGame:
             else:
                 if self.board.fullmove_number in self.engine.tactic_cache:
                     self.engine.current_tactic = self.engine.tactic_cache[self.board.fullmove_number]
-                    ui_elements["tactic_status"].percent_full = 100
+                    ui_elements['tactic_status'].percent_full = 100
                 else:
                     self.engine.tactic_search()
 
@@ -405,26 +406,26 @@ class ChessGame:
     def _handle_button_click(self, event: pygame.event.Event, ui_elements: dict, puzzle_mode: bool) -> bool:
         """Handle UI button click events."""
         # Handle hint
-        if event.ui_element == ui_elements["hint_button"]:
+        if event.ui_element == ui_elements['hint_button']:
             if self.engine.current_tactic:
                 self.highlight_hint = True
                 self._update_board()
         # Handle undo
-        elif event.ui_element == ui_elements["undo_button"]:
+        elif event.ui_element == ui_elements['undo_button']:
             self._handle_undo(ui_elements)
         # Handle reset
-        elif event.ui_element == ui_elements["reset_button"]:
+        elif event.ui_element == ui_elements['reset_button']:
             self._init_board()
             self.engine.reset_engine(self.board, not self.player_colour)
             self._update_board()
         # Handle previous puzzle
-        elif puzzle_mode and event.ui_element == ui_elements["prev_button"]:
+        elif puzzle_mode and event.ui_element == ui_elements['prev_button']:
             self._goto_puzzle(self.puzzle_index - 1)
         # Handle next puzzle
-        elif puzzle_mode and event.ui_element == ui_elements["next_button"]:
+        elif puzzle_mode and event.ui_element == ui_elements['next_button']:
             self._goto_puzzle(self.puzzle_index + 1)
         # Handle menu
-        elif event.ui_element == ui_elements["menu_button"]:
+        elif event.ui_element == ui_elements['menu_button']:
             self.engine.close()
             # Exit game loop
             return False
@@ -460,9 +461,9 @@ class ChessGame:
             manager.update(time_delta)
             # Update tactic status display
             if self.engine.current_tactic:
-                ui_elements["tactic_status"].percent_full = 100
+                ui_elements['tactic_status'].percent_full = 100
             else:
-                ui_elements["tactic_status"].percent_full = 0
+                ui_elements['tactic_status'].percent_full = 0
 
             # Make the engine move if it is the engine's turn
             if self.board.turn != self.player_colour and not self.board.is_game_over():
@@ -515,19 +516,19 @@ class ChessGame:
         menus = {}
         
         # Create menu instances
-        menus["main"] = pygame_menu.Menu(
+        menus['main'] = pygame_menu.Menu(
             'Chess Tactics Trainer', 
             self.width, self.height, 
             theme=pygame_menu.themes.THEME_DEFAULT
         )
         
-        menus["game"] = pygame_menu.Menu(
+        menus['game'] = pygame_menu.Menu(
             'Game Configuration', 
             self.width, self.height, 
             theme=pygame_menu.themes.THEME_DEFAULT
         )
         
-        menus["settings"] = pygame_menu.Menu(
+        menus['settings'] = pygame_menu.Menu(
             'Settings', 
             self.width, self.height, 
             theme=pygame_menu.themes.THEME_DEFAULT
@@ -541,10 +542,10 @@ class ChessGame:
             'selection_effect': None
         }
         
-        menus["main"].add.button('Start', menus["game"], **button_style)
-        menus["main"].add.button('Puzzle Demo', self._puzzle_demo, **button_style)
-        menus["main"].add.button('Settings', menus["settings"], **button_style)
-        menus["main"].add.button('Quit', pygame_menu.events.EXIT, **button_style)
+        menus['main'].add.button('Start', menus['game'], **button_style)
+        menus['main'].add.button('Puzzle Demo', self._puzzle_demo, **button_style)
+        menus['main'].add.button('Settings', menus['settings'], **button_style)
+        menus['main'].add.button('Quit', pygame_menu.events.EXIT, **button_style)
 
         # Game settings menu
         game_style = {
@@ -554,7 +555,7 @@ class ChessGame:
             'selection_effect': None
         }
         
-        menus["game"].add.selector(
+        menus['game'].add.selector(
             'Player Colour:', 
             [('White', chess.WHITE), ('Black', chess.BLACK), ('Random', -1)],
             default=0,
@@ -563,7 +564,7 @@ class ChessGame:
             **game_style
         )
         
-        menus["game"].add.dropselect_multiple(
+        menus['game'].add.dropselect_multiple(
             'Tactic Types:', 
             [
                 ('Checkmate', TACTIC_TYPES['Checkmate']), 
@@ -576,7 +577,7 @@ class ChessGame:
             **game_style
         )
         
-        menus["game"].add.selector(
+        menus['game'].add.selector(
             'Difficulty:',
             [('Easy', 1), ('Medium', 2), ('Hard', 3)],
             default=1,
@@ -585,7 +586,7 @@ class ChessGame:
             **game_style
         )
         
-        menus["game"].add.button(
+        menus['game'].add.button(
             'Start Game', 
             self._run, 
             font_size=64, 
@@ -611,12 +612,12 @@ class ChessGame:
                     break
 
             # Update and draw the main menu
-            menus["main"].update(events)
-            menus["main"].draw(self.window)
+            menus['main'].update(events)
+            menus['main'].draw(self.window)
             pygame.display.flip()
 
         pygame.quit()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     game = ChessGame()
     game.menu()
