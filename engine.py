@@ -33,6 +33,7 @@ class Tactic:
         """Get the next move in the tactic sequence and advance the index."""
         move = self.pv[self.index]
         self.index += 1
+        print(self.index)
         return move
     
     def hint_move(self) -> chess.Move:
@@ -53,7 +54,7 @@ class TacticsEngine:
         self.current_tactic = None
         self.search_depth = 8
         self.tactic_cache = {}
-        self.tactic_types = list(TACTIC_TYPES.values())#
+        self.tactic_types = list(TACTIC_TYPES.values())
 
         # Engine settings
         self.num_pv = None
@@ -80,25 +81,6 @@ class TacticsEngine:
     def set_tactic_types(self, types: list[int]) -> None:
         """Set the types of tactics to search for."""
         self.tactic_types = types
-
-    def _continue_tactic(self) -> chess.Move:
-        """Check if the engine should continue the current tactic."""
-        if not self.current_tactic:
-            return None
-        
-        if self.current_tactic.index < self.current_tactic.max_index and self.current_tactic.hint_move() == self.board.peek():
-            engine_move = self.current_tactic.next_move()
-
-            # Reset tactic if no moves left
-            if self.current_tactic.index == self.current_tactic.max_index:
-                self.current_tactic = None
-            
-            return engine_move
-        
-        self.tactic_cache[self.board.fullmove_number] = self.current_tactic
-        self.current_tactic = None
-
-        return None
     
     def _select_normal_move(self, analysis: list[dict], best_score: int) -> chess.Move:
         current_move = analysis[0]["pv"][0]
@@ -127,9 +109,8 @@ class TacticsEngine:
     def play_move(self) -> chess.Move:
         """Determine the move for the engine to play."""
         # Check if we're in the middle of a tactic
-        engine_move = self._continue_tactic()
-        if engine_move:
-            return engine_move
+        if self.current_tactic:
+            return self.current_tactic.next_move()
 
         num_pv = max(self.num_pv, 2)
         analysis = self.engine.analyse(self.board, self.limit, multipv=num_pv)
@@ -149,13 +130,14 @@ class TacticsEngine:
     
     def undo_tactic_move(self) -> None:
         """Undo a tactic move."""
-        if not self.current_tactic:
-            return
-
         if self.current_tactic.index >= 2:
             self.current_tactic.index -= 2
+        elif self.current_tactic.index == 1:
+            self.current_tactic.index -= 1
+            self.tactic_cache[self.board.ply() + 2] = self.current_tactic
+            self.current_tactic = None
         else:
-            self.tactic_cache[self.board.fullmove_number] = self.current_tactic
+            self.tactic_cache[self.board.ply()] = self.current_tactic
             self.current_tactic = None
 
     def _process_engine_moves(self, board: chess.Board, depth: int, sequence: list, mistake: bool, analysis: list[dict], search_stack: list, best_score: int) -> None:
@@ -321,11 +303,13 @@ class TacticSearch:
         for square in chess.scan_reversed(filtered_pieces):
             # If the pin was not present in the last position, move is a new pin
             if board.is_pinned(board.turn, square) and not last_position.is_pinned(board.turn, square):
+                pinned_piece = board.piece_at(square)
+                pinning_piece = board.piece_at(pinning_move.to_square)
+
                 # Make sure the pinned piece has no legal moves (like capturing the pinning piece)
                 if all(move.from_square != square for move in board.legal_moves):
                     pinned_pieces.append(square)
-                # Otherwise make sure the pinning piece is defended
-                elif len(board.attackers(not board.turn, pinning_move.to_square)):
+                elif PIECE_VALUES[pinned_piece.piece_type] > PIECE_VALUES[pinning_piece.piece_type]:
                     pinned_pieces.append(square)
 
         return pinned_pieces
@@ -364,9 +348,6 @@ class TacticSearch:
                 if pin_mask != chess.BB_ALL and last_pos_pin_mask == chess.BB_ALL:
                     # Make sure the pinned piece has no legal moves (like capturing the pinning piece)
                     if all(move.from_square != piece_square for move in board.legal_moves):
-                        pinned_pieces.append(piece_square)
-                    # Otherwise make sure the pinning piece is defended
-                    elif len(board.attackers(not board.turn, pinning_move.to_square)):
                         pinned_pieces.append(piece_square)
 
         return pinned_pieces
@@ -410,7 +391,44 @@ class TacticSearch:
                 forked_squares.append(square)
 
         # If there are less than two undefended/less valuable pieces AND the king is not forked, it's not a good fork
-        if len(forked_squares) < 2 and not king_forked:
-            return []
+        if len(forked_squares) < 2:
+            if not king_forked:
+                return []
+            
+            # King fork exception, check if the next move results in a capture/fork
+            for move in board.legal_moves:
+                temp_board = board.copy(stack=False)
+                temp_board.push(move)
+                # Skip if forking piece can be captured
+                if move.to_square == forking_move.to_square:
+                    return []
+                
+                # Update attacked pieces if one of them has moved to block the check
+                for index, attacked in enumerate(attacked_pieces):
+                    if move.from_square == attacked:
+                        attacked_pieces.remove(attacked)
+                        attacked_pieces.add(move.to_square)
+                        break
+                
+                new_forked = []
+                for square in attacked_pieces:
+                    # Interesting that this is inverted, but it works
+                    attackers = temp_board.attackers(not board.turn, square)
+                    defenders = temp_board.attackers(board.turn, square)
+
+                    # Check if the square is still being attacked
+                    if len(attackers) > 0:
+                        # If the square is still undefended, it's a good fork target
+                        if len(defenders) == 0:
+                            new_forked.append(square)
+                        else:
+                            # Check if one of the attackers is less valuable than the attacked square
+                            for attacker in attackers:
+                                if PIECE_VALUES[temp_board.piece_at(square).piece_type] > PIECE_VALUES[temp_board.piece_at(attacker).piece_type]:
+                                    new_forked.append(square)
+                                    break
+
+                if len(new_forked) == 0:
+                    return []
 
         return forked_squares

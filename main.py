@@ -302,12 +302,27 @@ class ChessGame:
             # Move the selected piece to the clicked square if it is a legal move
             else:
                 try:
+                    # Cache the current tactic state before playing the move
+                    if self.engine.current_tactic:
+                        self.engine.tactic_cache[self.board.ply()] = self.engine.current_tactic
+
                     move = self.board.find_move(self.selected_piece, square)
                     self._play_move_sound(move)
                     self.board.push(move)
                     self.selected_piece = None
                     self.hint_move = None
                     self.highlight_hint = False
+
+                    # Update tactic state
+                    if self.engine.current_tactic:
+                        if not self.engine.current_tactic.next_move() == move:
+                            # Update tactic cache
+                            self.engine.current_tactic = None
+                            return
+                    
+                        if self.engine.current_tactic.index > self.engine.current_tactic.max_index:
+                            self.engine.current_tactic = None
+
                 except chess.IllegalMoveError:
                     # Select a different piece if clicked on another valid piece
                     if piece and piece.color == self.board.turn:
@@ -315,15 +330,24 @@ class ChessGame:
 
     def _make_engine_move(self) -> None:
         """Make the engine's move and update the board state."""
+        if self.engine.current_tactic:
+            self.engine.tactic_cache[self.board.ply()] = self.engine.current_tactic
+            
         move = self.engine.play_move()
         self._play_move_sound(move)
         self.board.push(move)
+
+        # Update tactic state
+        if self.engine.current_tactic:
+            if self.engine.current_tactic.index > self.engine.current_tactic.max_index:
+                # Update tactic cache
+                self.engine.current_tactic = None
 
         # Search for new tactics if the current tactic is completed
         if not self.engine.current_tactic:
             self.engine.tactic_search()
 
-    def _handle_undo(self, ui_elements: dict) -> None:
+    def _handle_undo(self) -> None:
         """Handle undo button press."""
         if len(self.board.move_stack) >= 2:
             # Pop the engine move and the player move before it
@@ -335,10 +359,15 @@ class ChessGame:
             # Update tactic state
             if self.engine.current_tactic:
                 self.engine.undo_tactic_move()
+                if self.board.ply() in self.engine.tactic_cache:
+                    self.engine.current_tactic = self.engine.tactic_cache[self.board.ply()]
+                    self.engine.current_tactic.index -= 2
+                else:
+                    self.engine.tactic_search()
             else:
-                if self.board.fullmove_number in self.engine.tactic_cache:
-                    self.engine.current_tactic = self.engine.tactic_cache[self.board.fullmove_number]
-                    ui_elements['tactic_status'].percent_full = 100
+                if self.board.ply() in self.engine.tactic_cache:
+                    self.engine.current_tactic = self.engine.tactic_cache[self.board.ply()]
+                    self.engine.current_tactic.index -= 2
                 else:
                     self.engine.tactic_search()
 
@@ -412,7 +441,7 @@ class ChessGame:
                 self._update_board()
         # Handle undo
         elif event.ui_element == ui_elements['undo_button']:
-            self._handle_undo(ui_elements)
+            self._handle_undo()
         # Handle reset
         elif event.ui_element == ui_elements['reset_button']:
             self._init_board()
