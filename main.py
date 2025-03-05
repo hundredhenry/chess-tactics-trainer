@@ -328,10 +328,6 @@ class ChessGame:
             # Move the selected piece to the clicked square if it is a legal move
             else:
                 try:
-                    # Cache the current tactic state before playing the move
-                    if self.engine.current_tactic:
-                        self.engine.tactic_cache[self.board.ply()] = self.engine.current_tactic
-
                     move = self.board.find_move(self.selected_piece, square)
                     self._play_move_sound(move)
                     self.board.push(move)
@@ -342,7 +338,6 @@ class ChessGame:
                     # Update tactic state
                     if self.engine.current_tactic:
                         if not self.engine.current_tactic.next_move() == move:
-                            # Update tactic cache
                             self.engine.current_tactic = None
                             return
                     
@@ -356,8 +351,6 @@ class ChessGame:
 
     def _make_engine_move(self) -> None:
         """Make the engine's move and update the board state."""
-        if self.engine.current_tactic:
-            self.engine.tactic_cache[self.board.ply()] = self.engine.current_tactic
             
         move = self.engine.play_move()
         self._play_move_sound(move)
@@ -366,7 +359,6 @@ class ChessGame:
         # Update tactic state
         if self.engine.current_tactic:
             if self.engine.current_tactic.index > self.engine.current_tactic.max_index:
-                # Update tactic cache
                 self.engine.current_tactic = None
 
         # Search for new tactics if the current tactic is completed
@@ -385,17 +377,9 @@ class ChessGame:
             # Update tactic state
             if self.engine.current_tactic:
                 self.engine.undo_tactic_move()
-                if self.board.ply() in self.engine.tactic_cache:
-                    self.engine.current_tactic = self.engine.tactic_cache[self.board.ply()]
-                    self.engine.current_tactic.index -= 2
-                else:
-                    self.engine.tactic_search()
-            else:
-                if self.board.ply() in self.engine.tactic_cache:
-                    self.engine.current_tactic = self.engine.tactic_cache[self.board.ply()]
-                    self.engine.current_tactic.index -= 2
-                else:
-                    self.engine.tactic_search()
+            
+            if not self.engine.current_tactic:
+                self.engine.tactic_search()
 
             self._update_board()
 
@@ -470,8 +454,16 @@ class ChessGame:
             self._handle_undo()
         # Handle reset
         elif event.ui_element == ui_elements['reset_button']:
-            self._init_board()
-            self.engine.reset_engine(self.board, not self.player_colour)
+            if puzzle_mode:
+                self._init_board(self.puzzles[self.puzzle_index].fen)
+                self.board.push(self.puzzles[self.puzzle_index].moves[0])
+                self.player_colour = self.board.turn
+                self.engine.reset_engine(self.board, not self.player_colour)
+                self.engine.tactic_search(True)
+            else:
+                self._init_board()
+                self.engine.reset_engine(self.board, not self.player_colour)
+            
             self._update_board()
         # Handle previous puzzle
         elif puzzle_mode and event.ui_element == ui_elements['prev_button']:
@@ -528,7 +520,6 @@ class ChessGame:
             # Check for game over conditions
             outcome = self.board.outcome()
             if outcome:
-                self.engine.current_tactic = None
                 self._display_game_over(outcome)
             
             for event in pygame.event.get():

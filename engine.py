@@ -33,7 +33,6 @@ class Tactic:
         """Get the next move in the tactic sequence and advance the index."""
         move = self.pv[self.index]
         self.index += 1
-        print(self.index)
         return move
     
     def hint_move(self) -> chess.Move:
@@ -53,7 +52,6 @@ class TacticsEngine:
         self.engine_colour = engine_colour
         self.current_tactic = None
         self.search_depth = 8
-        self.tactic_cache = {}
         self.tactic_types = list(TACTIC_TYPES.values())
 
         # Engine settings
@@ -134,10 +132,8 @@ class TacticsEngine:
             self.current_tactic.index -= 2
         elif self.current_tactic.index == 1:
             self.current_tactic.index -= 1
-            self.tactic_cache[self.board.ply() + 2] = self.current_tactic
             self.current_tactic = None
         else:
-            self.tactic_cache[self.board.ply()] = self.current_tactic
             self.current_tactic = None
 
     def _process_engine_moves(self, board: chess.Board, depth: int, sequence: list, mistake: bool, analysis: list[dict], search_stack: list, best_score: int) -> None:
@@ -255,7 +251,6 @@ class TacticsEngine:
         self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
         self.engine_colour = engine_colour
         self.current_tactic = None
-        self.tactic_cache.clear()
 
     def close(self) -> None:
         """Close the engine process."""
