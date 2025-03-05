@@ -19,6 +19,7 @@ COLOURS = {
     'HINT': pygame.Color(49, 120, 115, 128),
     'BACKGROUND': pygame.Color(66, 69, 73),
     'TEXT': pygame.Color(255, 255, 255),
+    'NOTATION_TEXT': pygame.Color(0, 0, 0),
     'GAME_OVER_TEXT': pygame.Color(0, 0, 0)
 }
 
@@ -213,6 +214,31 @@ class ChessGame:
                 piece = self.board.piece_at(square)
                 if piece:
                     self._draw_piece(piece, square_x, square_y)
+
+        # Draw coordinate notations
+        font = pygame.font.Font('freesansbold.ttf', 14)
+        offset = 15  # Offset from the edge of the square
+        
+        # Draw file coordinates (a-h) along the bottom
+        for col in range(8):
+            file_idx = col if self.player_colour == chess.WHITE else 7 - col
+            file_letter = chr(ord('a') + file_idx)
+            file_text = font.render(file_letter, True, COLOURS['NOTATION_TEXT'])
+            self.window.blit(file_text, (
+                col * self.square_size + self.square_size - offset,
+                8 * self.square_size - offset
+            ))
+
+        offset = 5  # Offset from the edge of the square
+        # Draw rank coordinates (1-8) along the left side
+        for row in range(8):
+            rank_idx = 7 - row if self.player_colour == chess.WHITE else row
+            rank_number = str(rank_idx + 1)
+            rank_text = font.render(rank_number, True, COLOURS['NOTATION_TEXT'])
+            self.window.blit(rank_text, (
+                offset, 
+                row * self.square_size + offset
+            ))
                     
     def _update_board(self) -> None:
         # Clear window and redraw the board
