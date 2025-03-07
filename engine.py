@@ -57,6 +57,7 @@ class TacticsEngine:
         # Engine settings
         self.num_pv = None
         self.engine_depth = None
+        self.bounds = {}
         self.limit = None
 
     def set_difficulty(self, value: int) -> None:
@@ -65,14 +66,17 @@ class TacticsEngine:
         if value == 0:
             self.num_pv = 5
             self.engine_depth = 6
+            self.bounds = {'tactic': -300, 'min_mistake': 300, 'max_mistake': 150, 'normal': 30, 'advantage': 300}
         # Medium
         elif value == 1:
             self.num_pv = 3
             self.engine_depth = 10
+            self.bounds = {'tactic': -250, -'min_mistake': 250, 'max_mistake': 100, 'normal': 30, 'advantage': 200}
         # Hard
         else:
             self.num_pv = 1
             self.engine_depth = 15
+            self.bounds = {'tactic': -150, 'min_mistake': 150, 'max_mistake': 50, 'normal': 20, 'advantage': 150}
 
         self.limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
 
@@ -80,20 +84,27 @@ class TacticsEngine:
         """Set the types of tactics to search for."""
         self.tactic_types = types
     
-    def _select_normal_move(self, analysis: list[dict], best_score: int) -> chess.Move:
-        current_move = analysis[0]["pv"][0]
+    def only_move(self, analysis: list[dict] = None, best_score: int = None) -> chess.Move:
+        """Check if there's an obvious move to play."""
+        if not analysis:
+            analysis = self.engine.analyse(self.board, self.limit, multipv=2)
+            best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
 
-        """Selects the best move based on the position evaluation."""
+        current_move = analysis[0]["pv"][0]
         if len(analysis) == 1:
             return current_move
         
         second_score = analysis[1]["score"].pov(self.engine_colour).score(mate_score=100000)
 
         # If best move is significantly better, return it
-        if best_score >= second_score + 300:
+        if best_score >= second_score + self.bounds['advantage']:
             return current_move
-        
-        # Otherwise, find the least winning move
+        else:
+            return None
+    
+    def _select_normal_move(self, analysis: list[dict]) -> chess.Move:      
+        current_move = analysis[0]["pv"][0]  
+        """Selects the least winning based on the position evaluation."""
         for infodict in analysis[1:]:
             pv = infodict["pv"]
             score = infodict["score"].pov(self.engine_colour).score(mate_score=100000)
@@ -117,6 +128,11 @@ class TacticsEngine:
         if best_score > 5000:
             return analysis[0]["pv"][0]
         
+        # Only move available
+        move = self.only_move(analysis, best_score)
+        if move:
+            return move
+        
         # Tactic search
         self.tactic_search()
 
@@ -124,7 +140,7 @@ class TacticsEngine:
         if self.current_tactic:
             return self.current_tactic.next_move()
 
-        return self._select_normal_move(analysis, best_score)
+        return self._select_normal_move(analysis)
     
     def undo_tactic_move(self) -> None:
         """Undo a tactic move."""
@@ -144,12 +160,14 @@ class TacticsEngine:
 
             # For initial position, consider deliberate mistakes to create tactical opportunities
             if depth == self.search_depth and not mistake:
-                if -300 <= score < best_score - 100:
+                min_bound = best_score - self.bounds['min_mistake']
+                max_bound = best_score - self.bounds['max_mistake']
+                if min_bound <= score < max_bound:
                     next_board = board.copy(stack=1)
                     next_board.push(pv[0])
                     search_stack.append((next_board, depth - 1, sequence + [pv[0]], True))
             # Otherwise, play normal moves (slightly suboptimal moves are acceptable)
-            elif score >= best_score - 30:
+            elif score >= best_score - self.bounds['normal']:
                 next_board = board.copy(stack=1)
                 next_board.push(pv[0])
                 search_stack.append((next_board, depth - 1, sequence + [pv[0]], mistake))
@@ -162,7 +180,7 @@ class TacticsEngine:
             best_move_clear = True
         elif len(analysis) >= 2:
             second_score = analysis[1]["score"].pov(not self.engine_colour).score(mate_score=100000)
-            best_move_clear = best_score >= second_score + 250
+            best_move_clear = best_score >= second_score + abs(self.bounds['tactic'])
 
         # If there's a clear best move, check for tactics
         if best_move_clear:
@@ -176,7 +194,7 @@ class TacticsEngine:
             # Check if the move leads to a tactic
             tactic_index, tactic_type = self._pv_tactic_check(next_board, pv[1:])
             
-            if tactic_index >= 0 and score <= -250:
+            if tactic_index >= 0 and score <= self.bounds['tactic']:
                 self.current_tactic = Tactic(sequence + pv[:tactic_index + 1], tactic_type)
                 return
             
@@ -215,6 +233,8 @@ class TacticsEngine:
             # Human turn
             else:
                 self._process_player_moves(board, depth, sequence, mistake, analysis, search_stack, best_score)
+                if self.current_tactic:
+                    break
         
     def _pv_tactic_check(self, board: chess.Board, pv: list) -> tuple:
         """Check if the given move sequence contains a tactical opportunity."""
@@ -258,10 +278,31 @@ class TacticsEngine:
 
 class TacticSearch:
     """Static methods for detecting different types of chess tactics."""
+    @staticmethod
+    def absolute_pinner(board: chess.Board, colour: chess.Color, square: chess.Square) -> chess.Square:
+        """Calculate the pinning square for a potential absolute pin. Modified version of python-chess pin_mask function."""
+        king = board.king(colour)
+        square_mask = chess.BB_SQUARES[square]
+
+        for attacks, sliders in [(chess.BB_FILE_ATTACKS, board.rooks | board.queens),
+                                 (chess.BB_RANK_ATTACKS, board.rooks | board.queens),
+                                 (chess.BB_DIAG_ATTACKS, board.bishops | board.queens)]:
+            rays = attacks[king][0]
+            if rays & square_mask:
+                snipers = rays & sliders & board.occupied_co[not colour]
+                for sniper in chess.scan_reversed(snipers):
+                    # If the square is the only thing in between piece and sniper
+                    if chess.between(sniper, king) & (board.occupied | square_mask) == square_mask:
+                        return sniper
+
+                break
+        
+        # No pin found
+        return None
 
     @staticmethod
-    def relative_pin_mask(board: chess.Board, colour: chess.Color, square: chess.Square, piece: chess.Square) -> chess.Bitboard:
-        """Calculate the pin mask for a potential relative pin. Modified version of python-chess pin_mask method for absolute pins."""
+    def relative_pinner(board: chess.Board, colour: chess.Color, square: chess.Square, piece: chess.Square) -> chess.Square:
+        """Calculate the pinning square for a potential relative pin. Modified version of python-chess pin_mask function."""
         square_mask = chess.BB_SQUARES[square]
 
         for attacks, sliders in [(chess.BB_FILE_ATTACKS, board.rooks | board.queens),
@@ -271,14 +312,13 @@ class TacticSearch:
             if rays & square_mask:
                 snipers = rays & sliders & board.occupied_co[not colour]
                 for sniper in chess.scan_reversed(snipers):
-                    # If the square is the only thing in between piece and sniper
                     if chess.between(piece, sniper) & (board.occupied | square_mask) == square_mask:
-                        return chess.ray(piece, sniper)
+                        return sniper
                     
                 break
 
         # No pin found
-        return chess.BB_ALL
+        return None
 
     @staticmethod
     def absolute_pin(board: chess.Board) -> list:
@@ -287,7 +327,6 @@ class TacticSearch:
             return []
 
         pinned_pieces = []
-        pinning_move = board.peek()
         # Previous position
         last_position = board.copy()
         last_position.pop()
@@ -296,15 +335,26 @@ class TacticSearch:
         
         # Check each piece for a pin
         for square in chess.scan_reversed(filtered_pieces):
-            # If the pin was not present in the last position, move is a new pin
-            if board.is_pinned(board.turn, square) and not last_position.is_pinned(board.turn, square):
-                pinned_piece = board.piece_at(square)
-                pinning_piece = board.piece_at(pinning_move.to_square)
+            pinning_square = TacticSearch.absolute_pinner(board, board.turn, square)
+            last_pos_pin = TacticSearch.absolute_pinner(last_position, board.turn, square)
 
-                # Make sure the pinned piece has no legal moves (like capturing the pinning piece)
-                if all(move.from_square != square for move in board.legal_moves):
-                    pinned_pieces.append(square)
-                elif PIECE_VALUES[pinned_piece.piece_type] > PIECE_VALUES[pinning_piece.piece_type]:
+            # If the pin was not present in the last position, move is a new pin
+            if pinning_square != None and last_pos_pin == None:
+                pinning_piece = board.piece_at(pinning_square)
+                
+                # Add to pinned_pieces if this is a valid relative pin
+                is_valid_pin = True
+                
+                # Check if the pin can be broken by capturing the pinning piece
+                for move in board.legal_moves:
+                    if move.to_square == pinning_square:
+                        # If pinned piece can be captured by a less valuable piece, not a good pin
+                        if (PIECE_VALUES[board.piece_at(move.from_square).piece_type] < PIECE_VALUES[pinning_piece.piece_type] or
+                            board.piece_at(move.from_square).piece_type == chess.KING):
+                            is_valid_pin = False
+                            break
+                
+                if is_valid_pin:
                     pinned_pieces.append(square)
 
         return pinned_pieces
@@ -315,35 +365,51 @@ class TacticSearch:
             return []
         
         pinned_pieces = []
-        pinning_move = board.peek()
         # Previous position
         last_position = board.copy()
         last_position.pop()
         # Find all pieces except kings and pawns
-        filtered_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
+        valuable_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
+        pinable_pieces = board.occupied_co[board.turn] & ~board.kings
 
         # Check valuable pieces that could be targets for relative pins
-        for piece_square in chess.scan_reversed(filtered_pieces):
-            piece = board.piece_at(piece_square)
+        for valued_square in chess.scan_reversed(valuable_pieces):
+            valuable = board.piece_at(valued_square)
             # Search through all potential pinned pieces for this piece
-            for pin_square in chess.scan_reversed(filtered_pieces):
+            for pin_square in chess.scan_reversed(pinable_pieces):
                 # Skip if the piece is the same
-                if piece_square == pin_square:
+                if valued_square == pin_square:
                     continue
 
                 pinned = board.piece_at(pin_square)
-                # Skip if the pinned piece is more valuable than the piece being pinned to
-                if PIECE_VALUES[pinned.piece_type] > PIECE_VALUES[piece.piece_type]:
+                # Skip if the pinned piece is worth more than the valuable piece
+                if PIECE_VALUES[pinned.piece_type] > PIECE_VALUES[valuable.piece_type]:
                     continue
 
                 # Check if the piece is pinned
-                pin_mask = TacticSearch.relative_pin_mask(board, board.turn, pin_square, piece_square)
-                last_pos_pin_mask = TacticSearch.relative_pin_mask(last_position, board.turn, pin_square, piece_square)
+                pinning_square = TacticSearch.relative_pinner(board, board.turn, pin_square, valued_square)
+                last_pos_pin = TacticSearch.relative_pinner(last_position, board.turn, pin_square, valued_square)
+
                 # If the pin was not present in the last position, move is a new pin
-                if pin_mask != chess.BB_ALL and last_pos_pin_mask == chess.BB_ALL:
-                    # Make sure the pinned piece has no legal moves (like capturing the pinning piece)
-                    if all(move.from_square != piece_square for move in board.legal_moves):
-                        pinned_pieces.append(piece_square)
+                if pinning_square != None and last_pos_pin == None:
+                    pinning = board.piece_at(pinning_square)
+                    defenders = board.attackers(board.turn, valued_square)
+                    # Skip if the pinned piece is defended and the pinning piece is worth more than the valuable piece
+                    if len(defenders) > 0 and PIECE_VALUES[pinning.piece_type] > PIECE_VALUES[valuable.piece_type]:
+                        continue
+                             
+                    is_valid_pin = True
+                    # Check if the pin can be broken by capturing the pinning piece with a less valuable piece
+                    for move in board.legal_moves:
+                        if move.to_square == pinning_square:
+                            if (PIECE_VALUES[board.piece_at(move.from_square).piece_type] < PIECE_VALUES[pinning.piece_type] or
+                                board.piece_at(move.from_square).piece_type == chess.KING):
+                                is_valid_pin = False
+                                # Break out of for loop, move onto next pinned piece
+                                break
+                    
+                    if is_valid_pin:
+                        pinned_pieces.append(pin_square)
 
         return pinned_pieces
             

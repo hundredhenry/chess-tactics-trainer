@@ -362,10 +362,10 @@ class ChessGame:
                 self.engine.current_tactic = None
 
         # Search for new tactics if the current tactic is completed
-        if not self.engine.current_tactic:
+        if not self.engine.current_tactic and not self.engine.only_move():
             self.engine.tactic_search()
 
-    def _handle_undo(self) -> None:
+    def _handle_undo(self, puzzle_mode: bool):
         """Handle undo button press."""
         if len(self.board.move_stack) >= 2:
             # Pop the engine move and the player move before it
@@ -378,8 +378,11 @@ class ChessGame:
             if self.engine.current_tactic:
                 self.engine.undo_tactic_move()
             
-            if not self.engine.current_tactic:
-                self.engine.tactic_search()
+            if not self.engine.current_tactic and not self.engine.only_move():
+                if puzzle_mode and len(self.board.move_stack) == 1:
+                    self.engine.tactic_search(True)
+                else:
+                    self.engine.tactic_search()
 
             self._update_board()
 
@@ -451,7 +454,7 @@ class ChessGame:
                 self._update_board()
         # Handle undo
         elif event.ui_element == ui_elements['undo_button']:
-            self._handle_undo()
+            self._handle_undo(puzzle_mode)
         # Handle reset
         elif event.ui_element == ui_elements['reset_button']:
             if puzzle_mode:
@@ -474,6 +477,7 @@ class ChessGame:
         # Handle menu
         elif event.ui_element == ui_elements['menu_button']:
             self.engine.close()
+            self._init_game_settings()
             # Exit game loop
             return False
         
@@ -530,13 +534,15 @@ class ChessGame:
                     
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
                     running = self._handle_button_click(event, ui_elements, puzzle_mode)
-                    if not running:
-                        break
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     self._handle_click(event.pos)
                     self._update_board()
                 
                 manager.process_events(event)
+            
+            # Exit game loop if menu button is clicked
+            if not running:
+                break
 
             manager.draw_ui(self.window)
             # Display tactic text after UI is drawn so it appears on top
