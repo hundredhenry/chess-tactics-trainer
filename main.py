@@ -72,10 +72,12 @@ class ChessGame:
     def _init_game_settings(self):
         """Initialize default game settings."""
         self.player_colour = chess.WHITE
-        self.difficulty = 2
+        self.difficulty = None
         self.tactic_types = list(TACTIC_TYPES.values())  # All tactic types enabled by default
         self.board = None
         self.engine = None
+        self.puzzle_mode = False
+        self.puzzles = []
 
     def _load_images(self) -> dict:
         """Load chess piece images from file."""
@@ -110,7 +112,7 @@ class ChessGame:
     
     def _init_engine(self, difficulty: int, tactic_types: list[int]) -> None:
         """Initialize the chess engine with specified difficulty and tactic types."""
-        self.engine = TacticsEngine(ENGINE_PATH, self.board, not self.player_colour)
+        self.engine = TacticsEngine(ENGINE_PATH, self.board, not self.player_colour, self.puzzle_mode)
         self.engine.set_difficulty(difficulty)
         self.engine.set_tactic_types(tactic_types)
     
@@ -337,12 +339,8 @@ class ChessGame:
 
                     # Update tactic state
                     if self.engine.current_tactic:
-                        if not self.engine.current_tactic.next_move() == move:
-                            self.engine.current_tactic = None
-                            return
-                    
-                        if self.engine.current_tactic.index > self.engine.current_tactic.max_index:
-                            self.engine.current_tactic = None
+                        if self.engine.current_tactic.next_move() != move or self.engine.current_tactic.index > self.engine.current_tactic.max_index:
+                            self.engine.end_tactic()
 
                 except chess.IllegalMoveError:
                     # Select a different piece if clicked on another valid piece
@@ -351,21 +349,11 @@ class ChessGame:
 
     def _make_engine_move(self) -> None:
         """Make the engine's move and update the board state."""
-            
         move = self.engine.play_move()
         self._play_move_sound(move)
         self.board.push(move)
 
-        # Update tactic state
-        if self.engine.current_tactic:
-            if self.engine.current_tactic.index > self.engine.current_tactic.max_index:
-                self.engine.current_tactic = None
-
-        # Search for new tactics if the current tactic is completed
-        if not self.engine.current_tactic and not self.engine.only_move():
-            self.engine.tactic_search()
-
-    def _handle_undo(self, puzzle_mode: bool):
+    def _handle_undo(self):
         """Handle undo button press."""
         if len(self.board.move_stack) >= 2:
             # Pop the engine move and the player move before it
@@ -377,12 +365,8 @@ class ChessGame:
             # Update tactic state
             if self.engine.current_tactic:
                 self.engine.undo_tactic_move()
-            
-            if not self.engine.current_tactic and not self.engine.only_move():
-                if puzzle_mode and len(self.board.move_stack) == 1:
-                    self.engine.tactic_search(True)
-                else:
-                    self.engine.tactic_search()
+            else:
+                self.engine.tactic_search()
 
             self._update_board()
 
@@ -395,11 +379,11 @@ class ChessGame:
             self.player_colour = self.board.turn
             
             # Reset engine for new puzzle
-            self.engine.reset_engine(self.board, not self.player_colour)
-            self.engine.tactic_search(True)
+            self.engine.reset_engine(self.board, not self.player_colour, self.puzzle_mode)
+            self.engine.tactic_search()
             self._update_board()
 
-    def _setup_ui(self, puzzle_mode: bool) -> tuple:
+    def _setup_ui(self) -> tuple:
         """Set up UI elements for the game."""
         manager = pygame_gui.UIManager((self.width, self.height), 'theme.json')
         ui_elements = {}
@@ -431,7 +415,7 @@ class ChessGame:
         )
         
         # Puzzle mode specific buttons
-        if puzzle_mode:
+        if self.puzzle_mode:
             ui_elements["prev_button"] = pygame_gui.elements.UIButton(
                 relative_rect=pygame.Rect((5 * self.square_size, self.height - 50, self.square_size, 50)),
                 text='Previous', manager=manager
@@ -445,7 +429,7 @@ class ChessGame:
         pygame.display.update()
         return manager, ui_elements
     
-    def _handle_button_click(self, event: pygame.event.Event, ui_elements: dict, puzzle_mode: bool) -> bool:
+    def _handle_button_click(self, event: pygame.event.Event, ui_elements: dict) -> bool:
         """Handle UI button click events."""
         # Handle hint
         if event.ui_element == ui_elements['hint_button']:
@@ -454,25 +438,25 @@ class ChessGame:
                 self._update_board()
         # Handle undo
         elif event.ui_element == ui_elements['undo_button']:
-            self._handle_undo(puzzle_mode)
+            self._handle_undo()
         # Handle reset
         elif event.ui_element == ui_elements['reset_button']:
-            if puzzle_mode:
+            if self.puzzle_mode:
                 self._init_board(self.puzzles[self.puzzle_index].fen)
                 self.board.push(self.puzzles[self.puzzle_index].moves[0])
                 self.player_colour = self.board.turn
                 self.engine.reset_engine(self.board, not self.player_colour)
-                self.engine.tactic_search(True)
+                self.engine.tactic_search()
             else:
                 self._init_board()
                 self.engine.reset_engine(self.board, not self.player_colour)
             
             self._update_board()
         # Handle previous puzzle
-        elif puzzle_mode and event.ui_element == ui_elements['prev_button']:
+        elif self.puzzle_mode and event.ui_element == ui_elements['prev_button']:
             self._goto_puzzle(self.puzzle_index - 1)
         # Handle next puzzle
-        elif puzzle_mode and event.ui_element == ui_elements['next_button']:
+        elif self.puzzle_mode and event.ui_element == ui_elements['next_button']:
             self._goto_puzzle(self.puzzle_index + 1)
         # Handle menu
         elif event.ui_element == ui_elements['menu_button']:
@@ -484,27 +468,28 @@ class ChessGame:
         # Continue game loop
         return True
             
-    def _run(self, puzzle_mode = False) -> None:
+    def _run(self) -> None:
         """Run the main game loop."""
         running = True
         timer = pygame.time.Clock()
 
         # Initialize the board and engine based on game mode
-        if puzzle_mode:
+        if self.puzzle_mode:
             self._init_board(self.puzzles[0].fen)
             self.board.push(self.puzzles[0].moves[0])
             self.player_colour = self.board.turn
             self.puzzle_index = 0
+            self.difficulty = 2
         else:
             self._init_board()
 
         self._init_engine(self.difficulty, self.tactic_types)
         self._update_board()
 
-        manager, ui_elements = self._setup_ui(puzzle_mode)
+        manager, ui_elements = self._setup_ui()
 
-        if puzzle_mode:
-            self.engine.tactic_search(True)
+        if self.puzzle_mode:
+            self.engine.tactic_search()
 
         while running:
             # Limit the frame rate to 60 FPS
@@ -533,7 +518,7 @@ class ChessGame:
                     exit()
                     
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
-                    running = self._handle_button_click(event, ui_elements, puzzle_mode)
+                    running = self._handle_button_click(event, ui_elements)
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     self._handle_click(event.pos)
                     self._update_board()
@@ -552,7 +537,8 @@ class ChessGame:
             pygame.display.flip()
             
     def _puzzle_demo(self) -> None:
-        self.puzzles = []
+        """Run the puzzle demo mode."""
+        self.puzzle_mode = True
         # Load the FENs and moves from the puzzles.csv file
         with open('puzzles.csv', 'r') as file:
             lines = file.readlines()
@@ -561,7 +547,7 @@ class ChessGame:
                 moves = [chess.Move.from_uci(move) for move in moves.split()]
                 self.puzzles.append(Puzzle(int(tactic_type), fen, moves))
 
-        self._run(True)
+        self._run()
 
     def _create_menus(self) -> None:
         """Create the game menus."""
@@ -631,7 +617,7 @@ class ChessGame:
         
         menus['game'].add.selector(
             'Difficulty:',
-            [('Easy', 1), ('Medium', 2), ('Hard', 3)],
+            [('Easy', 0), ('Medium', 1), ('Hard', 2)],
             default=1,
             onchange=self._set_difficulty,
             style=pygame_menu.widgets.SELECTOR_STYLE_FANCY,
