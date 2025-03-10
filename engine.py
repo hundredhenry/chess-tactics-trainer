@@ -76,22 +76,22 @@ class TacticsEngine:
         """Configure engine parameters based on difficulty level."""
         # Easy
         if value == 0:
-            self.num_pv = 8
+            self.num_pv = 5
             self.engine_depth = 8
             self.search_depth = 6
-            self.bounds = {'tactic': -300, 'min_mistake': 300, 'max_mistake': 150, 'advantage': 250}
+            self.bounds = {'tactic': -300, 'min_mistake': 300, 'max_mistake': 200, 'advantage': 250}
         # Medium
         elif value == 1:
-            self.num_pv = 5
+            self.num_pv = 3
             self.engine_depth = 12
-            self.search_depth = 6
-            self.bounds = {'tactic': -250, 'min_mistake': 250, 'max_mistake': 100, 'advantage': 200}
+            self.search_depth = 4
+            self.bounds = {'tactic': -250, 'min_mistake': 250, 'max_mistake': 150, 'advantage': 200}
         # Hard
         else:
             self.num_pv = 1
             self.engine_depth = 16
             self.search_depth = 2
-            self.bounds = {'tactic': -200, 'min_mistake': 150, 'max_mistake': 50, 'advantage': 150}
+            self.bounds = {'tactic': -200, 'min_mistake': 200, 'max_mistake': 100, 'advantage': 150}
 
         self.limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
 
@@ -361,7 +361,7 @@ class TacticSearch:
         last_position = board.copy()
         last_position.pop()
         # Find all pieces except kings
-        filtered_pieces = board.occupied_co[board.turn] & ~board.kings
+        filtered_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
         
         # Check each piece for a pin
         for square in chess.scan_reversed(filtered_pieces):
@@ -400,7 +400,7 @@ class TacticSearch:
         last_position.pop()
         # Find all pieces except kings and pawns
         valuable_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
-        pinable_pieces = board.occupied_co[board.turn] & ~board.kings
+        pinable_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
 
         # Check valuable pieces that could be targets for relative pins
         for valued_square in chess.scan_reversed(valuable_pieces):
@@ -468,14 +468,15 @@ class TacticSearch:
         king_forked = False
 
         for square in attacked_pieces:
-            defenders = board.attackers(board.turn, square)
             target_piece = board.piece_at(square)
             # A king is always a good fork target since it must move
             if target_piece.piece_type == chess.KING:
                 king_forked = True
                 forked_squares.append(square)
+
+            defenders = board.attackers(board.turn, square)
             # A more valuable piece than the attacking forker is a good target
-            elif PIECE_VALUES[target_piece.piece_type] > PIECE_VALUES[forking_piece.piece_type]:
+            if PIECE_VALUES[target_piece.piece_type] > PIECE_VALUES[forking_piece.piece_type]:
                 forked_squares.append(square)
             # An undefended piece is a good target
             elif len(defenders) == 0:
