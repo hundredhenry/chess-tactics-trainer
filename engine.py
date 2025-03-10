@@ -495,11 +495,9 @@ class TacticSearch:
                     return []
                 
                 # Update attacked pieces if one of them has moved to block the check
-                for index, attacked in enumerate(attacked_pieces):
-                    if move.from_square == attacked:
-                        attacked_pieces.remove(attacked)
-                        attacked_pieces.add(move.to_square)
-                        break
+                if move.from_square in attacked_pieces:
+                    attacked_pieces.remove(move.from_square)
+                    attacked_pieces.add(move.to_square)
                 
                 new_forked = []
                 for square in attacked_pieces:
