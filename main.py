@@ -23,7 +23,7 @@ COLOURS = {
     'GAME_OVER_TEXT': pygame.Color(0, 0, 0)
 }
 
-ENGINE_PATH = './stockfish-windows-x86-64-avx2.exe'
+ENGINE_PATH = './stockfish-windows-x86-64-bmi2.exe'
 
 @dataclass
 class Puzzle:

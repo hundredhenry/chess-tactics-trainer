@@ -9,9 +9,9 @@ class EvaluationBenchmark:
         tactic_count = 0
         board = chess.Board()
         tactics_engine_turn = chess.BLACK
-        tactics_engine = TacticsEngine(r"./stockfish-windows-x86-64-avx2.exe", board, tactics_engine_turn, False)
+        tactics_engine = TacticsEngine(r"./stockfish-windows-x86-64-bmi2.exe", board, tactics_engine_turn, False)
         tactics_engine.set_difficulty(difficulty)
-        engine = chess.engine.SimpleEngine.popen_uci(r"./stockfish-windows-x86-64-avx2.exe")
+        engine = chess.engine.SimpleEngine.popen_uci(r"./stockfish-windows-x86-64-bmi2.exe")
         engine.configure({"Threads": 8})
         game_string = ""
 
@@ -48,7 +48,7 @@ class EvaluationBenchmark:
     def play_normal_game(benchmark_depth: int, engine_depth: int) -> tuple:
         tactic_count = 0
         board = chess.Board()
-        engine = chess.engine.SimpleEngine.popen_uci(r"./stockfish-windows-x86-64-avx2.exe")
+        engine = chess.engine.SimpleEngine.popen_uci(r"./stockfish-windows-x86-64-bmi2.exe")
         engine.configure({"Threads": 8})
         game_string = ""
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     evaluation = EvaluationBenchmark()
     difficulties = [0, 1, 2]
     benchmark_depths = [8, 12, 16]
-    engine_depths = [8, 12, 16]
+    engine_depths = [8, 10, 12, 14, 16, 18, 20]
     cumultative_tactic_count1 = 0
     cumultative_move_count1 = 0
     cumultative_tactic_count2 = 0
