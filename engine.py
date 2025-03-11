@@ -60,6 +60,7 @@ class TacticsEngine:
         self.board = board
         self.engine_path = engine_path
         self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
+        self.engine.configure({"Threads": 8})
         self.engine_colour = engine_colour
         self.puzzle_mode = puzzle_mode
         self.current_tactic = None
@@ -78,19 +79,19 @@ class TacticsEngine:
         if value == 0:
             self.num_pv = 5
             self.engine_depth = 8
-            self.search_depth = 6
+            self.search_depth = 8
             self.bounds = {'tactic': -300, 'min_mistake': 300, 'max_mistake': 200, 'advantage': 250}
         # Medium
         elif value == 1:
             self.num_pv = 3
             self.engine_depth = 12
-            self.search_depth = 4
+            self.search_depth = 6
             self.bounds = {'tactic': -250, 'min_mistake': 250, 'max_mistake': 150, 'advantage': 200}
         # Hard
         else:
             self.num_pv = 1
-            self.engine_depth = 16
-            self.search_depth = 2
+            self.engine_depth = 15
+            self.search_depth = 3
             self.bounds = {'tactic': -200, 'min_mistake': 200, 'max_mistake': 100, 'advantage': 150}
 
         self.limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
@@ -298,6 +299,7 @@ class TacticsEngine:
         self.engine.quit()
         self.board = board
         self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
+        self.engine.configure({"Threads": 8})
         self.engine_colour = engine_colour
         self.current_tactic = None
         self.puzzle_mode = puzzle_mode
