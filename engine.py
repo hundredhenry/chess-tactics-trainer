@@ -79,19 +79,19 @@ class TacticsEngine:
         if value == 0:
             self.num_pv = 5
             self.engine_depth = 8
-            self.search_depth = 8
+            self.search_depth = 6
             self.bounds = {'tactic': -300, 'min_mistake': 300, 'max_mistake': 200, 'advantage': 250}
         # Medium
         elif value == 1:
             self.num_pv = 3
             self.engine_depth = 12
-            self.search_depth = 6
+            self.search_depth = 4
             self.bounds = {'tactic': -250, 'min_mistake': 250, 'max_mistake': 150, 'advantage': 200}
         # Hard
         else:
             self.num_pv = 1
-            self.engine_depth = 15
-            self.search_depth = 3
+            self.engine_depth = 16
+            self.search_depth = 2
             self.bounds = {'tactic': -200, 'min_mistake': 200, 'max_mistake': 100, 'advantage': 150}
 
         self.limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
@@ -226,7 +226,7 @@ class TacticsEngine:
             tactic_index, tactic_type = self._pv_tactic_check(next_board, pv[1:])
             if tactic_index >= 0 and score <= self.bounds['tactic']:
                 self.current_tactic = Tactic(sequence + pv[:tactic_index + 1], score, tactic_type)
-                self.current_tactic.pretty_print()
+                #self.current_tactic.pretty_print()
                 return
             
             # Continue search if no tactic found
@@ -254,7 +254,7 @@ class TacticsEngine:
             # Engine getting checkmated line
             if best_score < -5000 and TACTIC_TYPES["Checkmate"] in self.tactic_types:
                 self.current_tactic = Tactic(sequence + analysis[0]["pv"], best_score, TACTIC_TYPES["Checkmate"])
-                self.current_tactic.pretty_print()
+                #self.current_tactic.pretty_print()
                 return
 
             # Engine turn
@@ -444,6 +444,43 @@ class TacticSearch:
                         pinned_pieces.append(pin_square)
 
         return pinned_pieces
+    
+    @staticmethod
+    def king_fork_exception(board: chess.Board, forking_move: chess.Move, attacked_pieces: set) -> bool:
+        """Check if a king fork exception is present."""
+        for move in board.legal_moves:
+            temp_board = board.copy(stack=False)
+            new_attacked_pieces = attacked_pieces.copy()
+            temp_board.push(move)
+            # Skip if forking piece can be captured
+            if move.to_square == forking_move.to_square:
+                return []
+            
+            # Update attacked pieces if one of them has moved to block the check
+            if move.from_square in new_attacked_pieces:
+                attackers = temp_board.attackers(temp_board.turn, move.to_square)
+                new_attacked_pieces.remove(move.from_square)
+                if len(attackers) > 0:
+                    new_attacked_pieces.add(move.to_square)
+            
+            new_forked = []
+            for square in new_attacked_pieces:
+                defenders = temp_board.attackers(not temp_board.turn, square)
+
+                # If the square is still undefended, it's a good fork target
+                if len(defenders) == 0:
+                    new_forked.append(square)
+                else:
+                    # Check if the attacked square is attacked by a less valuable piece
+                    for attacker in attackers:
+                        if PIECE_VALUES[temp_board.piece_at(attacker).piece_type] < PIECE_VALUES[temp_board.piece_at(square).piece_type]:
+                            new_forked.append(square)
+                            break
+
+            if len(new_forked) == 0:
+                return False
+            
+        return True
             
     @staticmethod
     def fork(board: chess.Board) -> list:
@@ -475,6 +512,7 @@ class TacticSearch:
             if target_piece.piece_type == chess.KING:
                 king_forked = True
                 forked_squares.append(square)
+                continue
 
             defenders = board.attackers(board.turn, square)
             # A more valuable piece than the attacking forker is a good target
@@ -486,41 +524,11 @@ class TacticSearch:
 
         # If there are less than two undefended/less valuable pieces AND the king is not forked, it's not a good fork
         if len(forked_squares) < 2:
-            if not king_forked:
+            if king_forked:
+                # Check if the king fork is an exception
+                if not TacticSearch.king_fork_exception(board, forking_move, attacked_pieces):
+                    return []
+            else:
                 return []
-            
-            # King fork exception, check if the next move results in a capture/fork
-            for move in board.legal_moves:
-                temp_board = board.copy(stack=False)
-                temp_board.push(move)
-                # Skip if forking piece can be captured
-                if move.to_square == forking_move.to_square:
-                    return []
-                
-                # Update attacked pieces if one of them has moved to block the check
-                if move.from_square in attacked_pieces:
-                    attacked_pieces.remove(move.from_square)
-                    attacked_pieces.add(move.to_square)
-                
-                new_forked = []
-                for square in attacked_pieces:
-                    # Interesting that this is inverted, but it works
-                    attackers = temp_board.attackers(temp_board.turn, square)
-                    defenders = temp_board.attackers(not temp_board.turn, square)
-
-                    # Check if the square is still being attacked
-                    if len(attackers) > 0:
-                        # If the square is still undefended, it's a good fork target
-                        if len(defenders) == 0:
-                            new_forked.append(square)
-                        else:
-                            # Check if one of the attackers is less valuable than the attacked square
-                            for attacker in attackers:
-                                if PIECE_VALUES[temp_board.piece_at(square).piece_type] > PIECE_VALUES[temp_board.piece_at(attacker).piece_type]:
-                                    new_forked.append(square)
-                                    break
-
-                if len(new_forked) == 0:
-                    return []
 
         return forked_squares

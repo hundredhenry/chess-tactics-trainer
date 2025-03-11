@@ -445,11 +445,12 @@ class ChessGame:
                 self._init_board(self.puzzles[self.puzzle_index].fen)
                 self.board.push(self.puzzles[self.puzzle_index].moves[0])
                 self.player_colour = self.board.turn
-                self.engine.reset_engine(self.board, not self.player_colour)
-                self.engine.tactic_search()
             else:
                 self._init_board()
-                self.engine.reset_engine(self.board, not self.player_colour)
+
+            self.engine.reset_engine(self.board, not self.player_colour, self.puzzle_mode)
+            if self.puzzle_mode:
+                self.engine.tactic_search()
             
             self._update_board()
         # Handle previous puzzle
