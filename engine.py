@@ -503,8 +503,8 @@ class TacticSearch:
                 new_forked = []
                 for square in attacked_pieces:
                     # Interesting that this is inverted, but it works
-                    attackers = temp_board.attackers(not board.turn, square)
-                    defenders = temp_board.attackers(board.turn, square)
+                    attackers = temp_board.attackers(temp_board.turn, square)
+                    defenders = temp_board.attackers(not temp_board.turn, square)
 
                     # Check if the square is still being attacked
                     if len(attackers) > 0:
