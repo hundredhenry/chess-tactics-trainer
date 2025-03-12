@@ -80,20 +80,20 @@ class TacticsEngine:
             self.num_pv = 5
             self.engine_depth = 8
             self.search_depth = 6
-            self.bounds = {'tactic': -300, 'min_mistake': 300, 'max_mistake': 200, 'advantage': 250}
+            self.bounds = {'tactic': -300, 'min_mistake': 320, 'max_mistake': 200, 'advantage': 200}
         # Medium
         elif value == 1:
             self.num_pv = 3
             self.engine_depth = 12
             self.search_depth = 4
-            self.bounds = {'tactic': -250, 'min_mistake': 250, 'max_mistake': 150, 'advantage': 200}
+            self.bounds = {'tactic': -200, 'min_mistake': 200, 'max_mistake': 150, 'advantage': 200}
         # Hard
         else:
             self.num_pv = 1
             self.engine_depth = 16
             self.search_depth = 2
-            self.bounds = {'tactic': -200, 'min_mistake': 200, 'max_mistake': 100, 'advantage': 150}
-
+            self.bounds = {'tactic': -200, 'min_mistake': 180, 'max_mistake': 150, 'advantage': 150}
+        
         self.limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
 
     def set_tactic_types(self, types: list[int]) -> None:
@@ -185,12 +185,11 @@ class TacticsEngine:
 
         self.tactic_search()
 
-    def _process_engine_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_stack: list, best_score: int) -> None:
+    def _process_engine_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_stack: list, best_score: int) -> list:
         """Process engine moves in the search stack."""
         for infodict in analysis:
             pv = infodict["pv"]
             score = infodict["score"].pov(self.engine_colour).score(mate_score=100000)
-
             # For initial position, consider deliberate mistakes to create tactical opportunities
             if depth == 0 and not self.puzzle_mode:
                 min_bound = best_score - self.bounds['min_mistake']
@@ -204,8 +203,10 @@ class TacticsEngine:
                 next_board = board.copy(stack=1)
                 next_board.push(pv[0])
                 search_stack.append((next_board, depth + 1, sequence + [pv[0]]))
+            
+        return search_stack
 
-    def _process_player_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_stack: list, best_score: int) -> None:
+    def _process_player_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_stack: list, best_score: int, shortest_tactic_length) -> tuple:
         """Process player moves in the search stack."""
         best_move_clear = False
         if len(analysis) == 1 and best_score <= -self.bounds['advantage']:
@@ -225,17 +226,22 @@ class TacticsEngine:
             # Check if the move leads to a tactic
             tactic_index, tactic_type = self._pv_tactic_check(next_board, pv[1:])
             if tactic_index >= 0 and score <= self.bounds['tactic']:
-                self.current_tactic = Tactic(sequence + pv[:tactic_index + 1], score, tactic_type)
-                #self.current_tactic.pretty_print()
-                return
-            
-            # Continue search if no tactic found
-            search_stack.append((next_board, depth + 1, sequence + [best_move]))
+                tactic_length = len(sequence + pv[:tactic_index + 1])
+                if tactic_length < shortest_tactic_length:
+                    self.current_tactic = Tactic(sequence + pv[:tactic_index + 1], score, tactic_type)
+                    #self.current_tactic.pretty_print()
+                    shortest_tactic_length = tactic_length
+            else:
+                # Continue search if no tactic found
+                search_stack.append((next_board, depth + 1, sequence + [best_move]))
+        
+        return search_stack, shortest_tactic_length
 
     def tactic_search(self) -> None:
         """Search for tactical opportunities in the current position."""
         initial_board = self.board.copy(stack=1)
         search_stack = [(initial_board, 0, [])]
+        shortest_tactic_length = 1000
 
         while search_stack:
             board, depth, sequence = search_stack.pop()
@@ -259,13 +265,11 @@ class TacticsEngine:
 
             # Engine turn
             if board.turn == self.engine_colour:
-                self._process_engine_moves(board, depth, sequence, analysis, search_stack, best_score)
+                search_stack = self._process_engine_moves(board, depth, sequence, analysis, search_stack, best_score)
             # Human turn
             else:
-                self._process_player_moves(board, depth, sequence, analysis, search_stack, best_score)
-                if self.current_tactic:
-                    return
-        
+                search_stack, shortest_tactic_length = self._process_player_moves(board, depth, sequence, analysis, search_stack, best_score, shortest_tactic_length)
+
     def _pv_tactic_check(self, board: chess.Board, pv: list) -> tuple:
         """Check if the given move sequence contains a tactical opportunity."""
         temp_board = board.copy(stack=1)
@@ -456,16 +460,18 @@ class TacticSearch:
             if move.to_square == forking_move.to_square:
                 return []
             
-            # Update attacked pieces if one of them has moved to block the check
             if move.from_square in new_attacked_pieces:
-                attackers = temp_board.attackers(temp_board.turn, move.to_square)
                 new_attacked_pieces.remove(move.from_square)
-                if len(attackers) > 0:
-                    new_attacked_pieces.add(move.to_square)
-            
+                new_attacked_pieces.add(move.to_square)
+                        
             new_forked = []
             for square in new_attacked_pieces:
+                attackers = temp_board.attackers(temp_board.turn, square)
                 defenders = temp_board.attackers(not temp_board.turn, square)
+
+                # No longer attacked, skip
+                if len(attackers) == 0:
+                    continue
 
                 # If the square is still undefended, it's a good fork target
                 if len(defenders) == 0:

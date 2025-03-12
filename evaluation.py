@@ -87,8 +87,8 @@ if __name__ == "__main__":
         for engine_depth in engine_depths:
             print(benchmark_depth, engine_depth)
             tactic_count, move_count = evaluation.play_normal_game(benchmark_depth, engine_depth)
-            print("Tactic Count: " + str(tactic_count))
-            print("Tactic Proportion: " + str(tactic_count / move_count) + "\n")
+            print(f"Tactic Count: {tactic_count}")
+            print(f"Tactic Proportion: {(tactic_count / move_count) * 100}%\n")
             cumultative_tactic_count1 += tactic_count
             cumultative_move_count1 += move_count
 
@@ -96,8 +96,8 @@ if __name__ == "__main__":
         for engine_depth in engine_depths:
             print(difficulty, engine_depth)
             tactic_count, move_count = evaluation.play_tactic_game(difficulty, engine_depth)
-            print("Tactic Count: " + str(tactic_count))
-            print("Tactic Proportion: " + str(tactic_count / move_count) + "\n")
+            print(f"Tactic Count: {tactic_count}")
+            print(f"Tactic Proportion: {(tactic_count / move_count) * 100}%\n")
             cumultative_tactic_count2 += tactic_count
             cumultative_move_count2 += move_count
 
