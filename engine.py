@@ -78,20 +78,20 @@ class TacticsEngine:
         # Easy
         if value == 0:
             self.num_pv = 5
-            self.engine_depth = 8
-            self.search_depth = 6
+            self.engine_depth = 6
+            self.search_depth = 12
             self.bounds = {'tactic': -300, 'min_mistake': 320, 'max_mistake': 200, 'advantage': 200}
         # Medium
         elif value == 1:
             self.num_pv = 3
-            self.engine_depth = 12
-            self.search_depth = 4
+            self.engine_depth = 10
+            self.search_depth = 8
             self.bounds = {'tactic': -200, 'min_mistake': 200, 'max_mistake': 150, 'advantage': 200}
         # Hard
         else:
             self.num_pv = 1
-            self.engine_depth = 16
-            self.search_depth = 2
+            self.engine_depth = 14
+            self.search_depth = 4
             self.bounds = {'tactic': -200, 'min_mistake': 180, 'max_mistake': 150, 'advantage': 150}
         
         self.limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
@@ -206,7 +206,7 @@ class TacticsEngine:
             
         return search_stack
 
-    def _process_player_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_stack: list, best_score: int, shortest_tactic_length) -> tuple:
+    def _process_player_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_stack: list, best_score: int) -> list:
         """Process player moves in the search stack."""
         best_move_clear = False
         if len(analysis) == 1 and best_score <= -self.bounds['advantage']:
@@ -226,22 +226,19 @@ class TacticsEngine:
             # Check if the move leads to a tactic
             tactic_index, tactic_type = self._pv_tactic_check(next_board, pv[1:])
             if tactic_index >= 0 and score <= self.bounds['tactic']:
-                tactic_length = len(sequence + pv[:tactic_index + 1])
-                if tactic_length < shortest_tactic_length:
-                    self.current_tactic = Tactic(sequence + pv[:tactic_index + 1], score, tactic_type)
-                    #self.current_tactic.pretty_print()
-                    shortest_tactic_length = tactic_length
+                self.current_tactic = Tactic(sequence + pv[:tactic_index + 1], score, tactic_type)
+                self.current_tactic.pretty_print()
+                return []
             else:
                 # Continue search if no tactic found
                 search_stack.append((next_board, depth + 1, sequence + [best_move]))
         
-        return search_stack, shortest_tactic_length
+        return search_stack
 
     def tactic_search(self) -> None:
         """Search for tactical opportunities in the current position."""
         initial_board = self.board.copy(stack=1)
         search_stack = [(initial_board, 0, [])]
-        shortest_tactic_length = 1000
 
         while search_stack:
             board, depth, sequence = search_stack.pop()
@@ -260,7 +257,7 @@ class TacticsEngine:
             # Engine getting checkmated line
             if best_score < -5000 and TACTIC_TYPES["Checkmate"] in self.tactic_types:
                 self.current_tactic = Tactic(sequence + analysis[0]["pv"], best_score, TACTIC_TYPES["Checkmate"])
-                #self.current_tactic.pretty_print()
+                self.current_tactic.pretty_print()
                 return
 
             # Engine turn
@@ -268,7 +265,7 @@ class TacticsEngine:
                 search_stack = self._process_engine_moves(board, depth, sequence, analysis, search_stack, best_score)
             # Human turn
             else:
-                search_stack, shortest_tactic_length = self._process_player_moves(board, depth, sequence, analysis, search_stack, best_score, shortest_tactic_length)
+                search_stack = self._process_player_moves(board, depth, sequence, analysis, search_stack, best_score)
 
     def _pv_tactic_check(self, board: chess.Board, pv: list) -> tuple:
         """Check if the given move sequence contains a tactical opportunity."""
