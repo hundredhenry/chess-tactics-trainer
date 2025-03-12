@@ -10,20 +10,20 @@ from engine import TacticsEngine,  TACTIC_TYPES
 
 # Colors for board and highlights
 COLOURS = {
-    'LIGHT_SQUARE': pygame.Color(240, 217, 181),
-    'DARK_SQUARE': pygame.Color(181, 136, 99),
-    'HIGHLIGHT_MOVE': pygame.Color(115, 130, 85, 128),
-    'HIGHLIGHT_PIECE': pygame.Color(115, 130, 85, 255),
-    'LAST_MOVE': pygame.Color(189, 186, 83, 128),
-    'CAPTURE': pygame.Color(204, 0, 0, 128),
-    'HINT': pygame.Color(49, 120, 115, 128),
-    'BACKGROUND': pygame.Color(66, 69, 73),
-    'TEXT': pygame.Color(255, 255, 255),
-    'NOTATION_TEXT': pygame.Color(0, 0, 0),
-    'GAME_OVER_TEXT': pygame.Color(0, 0, 0)
+    "LIGHT_SQUARE": pygame.Color(240, 217, 181),
+    "DARK_SQUARE": pygame.Color(181, 136, 99),
+    "HIGHLIGHT_MOVE": pygame.Color(115, 130, 85, 128),
+    "HIGHLIGHT_PIECE": pygame.Color(115, 130, 85, 255),
+    "LAST_MOVE": pygame.Color(189, 186, 83, 128),
+    "CAPTURE": pygame.Color(204, 0, 0, 128),
+    "HINT": pygame.Color(49, 120, 115, 128),
+    "BACKGROUND": pygame.Color(66, 69, 73),
+    "TEXT": pygame.Color(255, 255, 255),
+    "NOTATION_TEXT": pygame.Color(0, 0, 0),
+    "GAME_OVER_TEXT": pygame.Color(0, 0, 0)
 }
 
-ENGINE_PATH = './stockfish-windows-x86-64-bmi2.exe'
+ENGINE_PATH = "./stockfish-windows-x86-64-bmi2.exe"
 
 @dataclass
 class Puzzle:
@@ -50,7 +50,7 @@ class ChessGame:
     def _setup_display(self):
         """Configure the game window and display properties."""
         # Set window icon
-        pygame.display.set_caption('Chess Tactics Trainer')
+        pygame.display.set_caption("Chess Tactics Trainer")
         icon = pygame.transform.smoothscale(self.images['bk'], (32, 32))
         pygame.display.set_icon(icon)
         # Set window size and display
@@ -84,7 +84,7 @@ class ChessGame:
         images = {}
         for symbol in self.piece_symbols.values():
             try:
-                image_path = os.path.join('images', f'{symbol}.png')
+                image_path = os.path.join("images", f'{symbol}.png')
                 image = pygame.image.load(image_path)
                 scaled_image = pygame.transform.smoothscale(image, (self.square_size, self.square_size))
                 images[symbol] = scaled_image
@@ -97,10 +97,10 @@ class ChessGame:
     def _load_sounds(self) -> dict:
         """Load chess move sound effects."""
         return {
-            'move_check': pygame.mixer.Sound('sounds/move-check.mp3'),
-            'capture': pygame.mixer.Sound('sounds/capture.mp3'),
-            'promote': pygame.mixer.Sound('sounds/promote.mp3'),
-            'move_self': pygame.mixer.Sound('sounds/move-self.mp3')
+            "move_check": pygame.mixer.Sound("sounds/move-check.mp3"),
+            "capture": pygame.mixer.Sound("sounds/capture.mp3"),
+            "promote": pygame.mixer.Sound("sounds/promote.mp3"),
+            "move_self": pygame.mixer.Sound("sounds/move-self.mp3")
         }
 
     def _init_board(self, fen: str = chess.STARTING_FEN) -> None:
@@ -118,7 +118,7 @@ class ChessGame:
     
     def _set_player_colour(self, selection: tuple, value: int) -> None:
         """Set the player's color (white, black, or random)."""
-        if selection[0][0] == 'Random':
+        if selection[0][0] == "Random":
             self.player_colour = random.choice([chess.WHITE, chess.BLACK])
         else:
             self.player_colour = value
@@ -147,30 +147,30 @@ class ChessGame:
         """Apply appropriate highlighting to squares based on game state."""    
         # Hint highlighting has top priority
         if self.hint_move != None and square == self.hint_move.to_square:
-            self._highlight_square(x, y, COLOURS['HINT'])
+            self._highlight_square(x, y, COLOURS["HINT"])
             return
 
         # Selected piece highlighting
         if square == self.selected_piece:
-            self._highlight_square(x, y, COLOURS['HIGHLIGHT_PIECE'])
+            self._highlight_square(x, y, COLOURS["HIGHLIGHT_PIECE"])
             return
         
         # Move highlighting
         if move:
-            highlight_color = COLOURS['CAPTURE'] if self.board.is_capture(move) else COLOURS['HIGHLIGHT_MOVE']
+            highlight_color = COLOURS["CAPTURE"] if self.board.is_capture(move) else COLOURS["HIGHLIGHT_MOVE"]
             self._highlight_square(x, y, highlight_color)
             return
         
         # Check highlighting
         if self.board.is_check() and square == self.board.king(self.board.turn):
-            self._highlight_square(x, y, COLOURS['CAPTURE'])
+            self._highlight_square(x, y, COLOURS["CAPTURE"])
             return
 
         # Last move highlighting
         if self.board.move_stack:
             last_move = self.board.peek()
             if last_move and square in (last_move.from_square, last_move.to_square):
-                self._highlight_square(x, y, COLOURS['LAST_MOVE'])
+                self._highlight_square(x, y, COLOURS["LAST_MOVE"])
 
     def _draw_board(self) -> None:
         """Draw the complete chess board with pieces and highlights."""
@@ -198,7 +198,7 @@ class ChessGame:
 
                 # Get square information
                 square = chess.square(visual_col, visual_row)
-                square_color = COLOURS['LIGHT_SQUARE'] if (visual_row + visual_col) % 2 == 0 else COLOURS['DARK_SQUARE']
+                square_color = COLOURS["LIGHT_SQUARE"] if (visual_row + visual_col) % 2 == 0 else COLOURS["DARK_SQUARE"]
                 square_x, square_y = col * self.square_size, row * self.square_size
 
                 # Draw square
@@ -218,14 +218,14 @@ class ChessGame:
                     self._draw_piece(piece, square_x, square_y)
 
         # Draw coordinate notations
-        font = pygame.font.Font('freesansbold.ttf', 14)
+        font = pygame.font.Font("freesansbold.ttf", 14)
         offset = 15  # Offset from the edge of the square
         
         # Draw file coordinates (a-h) along the bottom
         for col in range(8):
             file_idx = col if self.player_colour == chess.WHITE else 7 - col
             file_letter = chr(ord('a') + file_idx)
-            file_text = font.render(file_letter, True, COLOURS['NOTATION_TEXT'])
+            file_text = font.render(file_letter, True, COLOURS["NOTATION_TEXT"])
             self.window.blit(file_text, (
                 col * self.square_size + self.square_size - offset,
                 8 * self.square_size - offset
@@ -236,7 +236,7 @@ class ChessGame:
         for row in range(8):
             rank_idx = 7 - row if self.player_colour == chess.WHITE else row
             rank_number = str(rank_idx + 1)
-            rank_text = font.render(rank_number, True, COLOURS['NOTATION_TEXT'])
+            rank_text = font.render(rank_number, True, COLOURS["NOTATION_TEXT"])
             self.window.blit(rank_text, (
                 offset, 
                 row * self.square_size + offset
@@ -244,56 +244,56 @@ class ChessGame:
                     
     def _update_board(self) -> None:
         # Clear window and redraw the board
-        self.window.fill(COLOURS['BACKGROUND'])
+        self.window.fill(COLOURS["BACKGROUND"])
         self._draw_board()
 
     def _display_tactic_text(self) -> None:
         """Display the current tactic message on the screen."""
-        font = pygame.font.Font('freesansbold.ttf', 14)
+        font = pygame.font.Font("freesansbold.ttf", 14)
         num_moves = self.engine.current_tactic.moves_left()
         tactic_messages = {
-            TACTIC_TYPES['Checkmate']: f'Mate in {num_moves} moves',
-            TACTIC_TYPES['Fork']: f'Fork in {num_moves} moves',
-            TACTIC_TYPES['Absolute Pin']: f'Absolute Pin in {num_moves} moves',
-            TACTIC_TYPES['Relative Pin']: f'Relative Pin in {num_moves} moves'
+            TACTIC_TYPES["Checkmate"]: f'Mate in {num_moves} moves',
+            TACTIC_TYPES["Fork"]: f'Fork in {num_moves} moves',
+            TACTIC_TYPES["Absolute Pin"]: f'Absolute Pin in {num_moves} moves',
+            TACTIC_TYPES["Relative Pin"]: f'Relative Pin in {num_moves} moves'
         }
         message = tactic_messages.get(self.engine.current_tactic.type, '')
-        text = font.render(message, True, COLOURS['TEXT'])
+        text = font.render(message, True, COLOURS["TEXT"])
         text_rect = text.get_rect(center=(self.square_size, self.height - 25))
         self.window.blit(text, text_rect)
 
     def _display_game_over(self, outcome: chess.Outcome) -> None:
         """Display game over message with the outcome."""
-        font = pygame.font.Font('freesansbold.ttf', 42)
+        font = pygame.font.Font("freesansbold.ttf", 42)
         
         if outcome.winner == self.player_colour:
-            message = 'You Won'
+            message = "You Won"
         elif outcome.winner == (not self.player_colour):
-            message = 'You Lost'
+            message = "You Lost"
         else:
             # Draw message based on termination type
             draw_messages = {
-                chess.Termination.STALEMATE: 'Draw: Stalemate',
-                chess.Termination.FIFTY_MOVES: 'Draw: Fifty Move Rule',
-                chess.Termination.THREEFOLD_REPETITION: 'Draw: Threefold Repetition',
-                chess.Termination.INSUFFICIENT_MATERIAL: 'Draw: Insufficient Material'
+                chess.Termination.STALEMATE: "Draw: Stalemate",
+                chess.Termination.FIFTY_MOVES: "Draw: Fifty Move Rule",
+                chess.Termination.THREEFOLD_REPETITION: "Draw: Threefold Repetition",
+                chess.Termination.INSUFFICIENT_MATERIAL: "Draw: Insufficient Material"
             }
-            message = draw_messages.get(outcome.termination, 'Draw')
+            message = draw_messages.get(outcome.termination, "Draw")
 
-        text = font.render(message, True, COLOURS['GAME_OVER_TEXT'])
+        text = font.render(message, True, COLOURS["GAME_OVER_TEXT"])
         text_rect = text.get_rect(center=(self.width // 2, self.height // 2))
         self.window.blit(text, text_rect)
 
     def _play_move_sound(self, move: chess.Move) -> None:
         """Play sound effect based on the move type."""
         if self.board.gives_check(move):
-            self.sounds['move_check'].play()
+            self.sounds["move_check"].play()
         elif self.board.is_capture(move):
-            self.sounds['capture'].play()
+            self.sounds["capture"].play()
         elif move.promotion:
-            self.sounds['promote'].play()
+            self.sounds["promote"].play()
         else:
-            self.sounds['move_self'].play()
+            self.sounds["move_self"].play()
 
     def _handle_click(self, pos: tuple[int, int]) -> None:
         """Handle mouse click on the chess board."""
@@ -385,7 +385,7 @@ class ChessGame:
 
     def _setup_ui(self) -> tuple:
         """Set up UI elements for the game."""
-        manager = pygame_gui.UIManager((self.width, self.height), 'theme.json')
+        manager = pygame_gui.UIManager((self.width, self.height), "theme.json")
         ui_elements = {}
         
         # Common UI elements
@@ -432,15 +432,15 @@ class ChessGame:
     def _handle_button_click(self, event: pygame.event.Event, ui_elements: dict) -> bool:
         """Handle UI button click events."""
         # Handle hint
-        if event.ui_element == ui_elements['hint_button']:
+        if event.ui_element == ui_elements["hint_button"]:
             if self.engine.current_tactic:
                 self.highlight_hint = True
                 self._update_board()
         # Handle undo
-        elif event.ui_element == ui_elements['undo_button']:
+        elif event.ui_element == ui_elements["undo_button"]:
             self._handle_undo()
         # Handle reset
-        elif event.ui_element == ui_elements['reset_button']:
+        elif event.ui_element == ui_elements["reset_button"]:
             if self.puzzle_mode:
                 self._init_board(self.puzzles[self.puzzle_index].fen)
                 self.board.push(self.puzzles[self.puzzle_index].moves[0])
@@ -454,13 +454,13 @@ class ChessGame:
             
             self._update_board()
         # Handle previous puzzle
-        elif self.puzzle_mode and event.ui_element == ui_elements['prev_button']:
+        elif self.puzzle_mode and event.ui_element == ui_elements["prev_button"]:
             self._goto_puzzle(self.puzzle_index - 1)
         # Handle next puzzle
-        elif self.puzzle_mode and event.ui_element == ui_elements['next_button']:
+        elif self.puzzle_mode and event.ui_element == ui_elements["next_button"]:
             self._goto_puzzle(self.puzzle_index + 1)
         # Handle menu
-        elif event.ui_element == ui_elements['menu_button']:
+        elif event.ui_element == ui_elements["menu_button"]:
             self.engine.close()
             self._init_game_settings()
             # Exit game loop
@@ -498,9 +498,9 @@ class ChessGame:
             manager.update(time_delta)
             # Update tactic status display
             if self.engine.current_tactic:
-                ui_elements['tactic_status'].percent_full = 100
+                ui_elements["tactic_status"].percent_full = 100
             else:
-                ui_elements['tactic_status'].percent_full = 0
+                ui_elements["tactic_status"].percent_full = 0
 
             # Make the engine move if it is the engine's turn
             if self.board.turn != self.player_colour and not self.board.is_game_over():
@@ -541,7 +541,7 @@ class ChessGame:
         """Run the puzzle demo mode."""
         self.puzzle_mode = True
         # Load the FENs and moves from the puzzles.csv file
-        with open('puzzles.csv', 'r') as file:
+        with open("puzzles.csv", 'r') as file:
             lines = file.readlines()
             for line in lines:
                 tactic_type, fen, moves = line.strip().split(',')
@@ -555,48 +555,48 @@ class ChessGame:
         menus = {}
         
         # Create menu instances
-        menus['main'] = pygame_menu.Menu(
-            'Chess Tactics Trainer', 
+        menus["main"] = pygame_menu.Menu(
+            "Chess Tactics Trainer", 
             self.width, self.height, 
             theme=pygame_menu.themes.THEME_DEFAULT
         )
         
-        menus['game'] = pygame_menu.Menu(
-            'Game Configuration', 
+        menus["game"] = pygame_menu.Menu(
+            "Game Configuration", 
             self.width, self.height, 
             theme=pygame_menu.themes.THEME_DEFAULT
         )
         
-        menus['settings'] = pygame_menu.Menu(
-            'Settings', 
+        menus["settings"] = pygame_menu.Menu(
+            "Settings", 
             self.width, self.height, 
             theme=pygame_menu.themes.THEME_DEFAULT
         )
 
         # Main menu options
         button_style = {
-            'align': pygame_menu.locals.ALIGN_LEFT,
-            'font_size': 64,
-            'margin': (50, 50),
-            'selection_effect': None
+            "align": pygame_menu.locals.ALIGN_LEFT,
+            "font_size": 64,
+            "margin": (50, 50),
+            "selection_effect": None
         }
         
-        menus['main'].add.button('Start', menus['game'], **button_style)
-        menus['main'].add.button('Puzzle Demo', self._puzzle_demo, **button_style)
-        menus['main'].add.button('Settings', menus['settings'], **button_style)
-        menus['main'].add.button('Quit', pygame_menu.events.EXIT, **button_style)
+        menus["main"].add.button("Start", menus["game"], **button_style)
+        menus["main"].add.button("Puzzle Demo", self._puzzle_demo, **button_style)
+        menus["main"].add.button("Settings", menus["settings"], **button_style)
+        menus["main"].add.button("Quit", pygame_menu.events.EXIT, **button_style)
 
         # Game settings menu
         game_style = {
-            'align': pygame_menu.locals.ALIGN_RIGHT,
-            'font_size': 40,
-            'margin': (-75, 25),
-            'selection_effect': None
+            "align": pygame_menu.locals.ALIGN_RIGHT,
+            "font_size": 40,
+            "margin": (-75, 25),
+            "selection_effect": None
         }
         
-        menus['game'].add.selector(
-            'Player Colour:', 
-            [('White', chess.WHITE), ('Black', chess.BLACK), ('Random', -1)],
+        menus["game"].add.selector(
+            "Player Colour:", 
+            [("White", chess.WHITE), ("Black", chess.BLACK), ("Random", -1)],
             default=0,
             onchange=self._set_player_colour,
             style=pygame_menu.widgets.SELECTOR_STYLE_FANCY,
@@ -606,27 +606,27 @@ class ChessGame:
         menus['game'].add.dropselect_multiple(
             'Tactic Types:', 
             [
-                ('Checkmate', TACTIC_TYPES['Checkmate']), 
-                ('Fork', TACTIC_TYPES['Fork']), 
-                ('Absolute Pin', TACTIC_TYPES['Absolute Pin']), 
-                ('Relative Pin', TACTIC_TYPES['Relative Pin'])
+                ("Checkmate", TACTIC_TYPES["Checkmate"]), 
+                ("Fork", TACTIC_TYPES["Fork"]), 
+                ("Absolute Pin", TACTIC_TYPES["Absolute Pin"]), 
+                ("Relative Pin", TACTIC_TYPES["Relative Pin"])
             ],
             default=list(TACTIC_TYPES.values()),
             onchange=self._set_tactic_types,
             **game_style
         )
         
-        menus['game'].add.selector(
-            'Difficulty:',
-            [('Easy', 0), ('Medium', 1), ('Hard', 2)],
+        menus["game"].add.selector(
+            "Difficulty:",
+            [("Easy", 0), ("Medium", 1), ("Hard", 2)],
             default=1,
             onchange=self._set_difficulty,
             style=pygame_menu.widgets.SELECTOR_STYLE_FANCY,
             **game_style
         )
         
-        menus['game'].add.button(
-            'Start Game', 
+        menus["game"].add.button(
+            "Start Game", 
             self._run, 
             font_size=64, 
             margin=(0, 50), 
@@ -651,12 +651,12 @@ class ChessGame:
                     break
 
             # Update and draw the main menu
-            menus['main'].update(events)
-            menus['main'].draw(self.window)
+            menus["main"].update(events)
+            menus["main"].draw(self.window)
             pygame.display.flip()
 
         pygame.quit()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     game = ChessGame()
     game.menu()

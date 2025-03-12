@@ -227,7 +227,7 @@ class TacticsEngine:
             tactic_index, tactic_type = self._pv_tactic_check(next_board, pv[1:])
             if tactic_index >= 0 and score <= self.bounds['tactic']:
                 self.current_tactic = Tactic(sequence + pv[:tactic_index + 1], score, tactic_type)
-                #self.current_tactic.pretty_print()
+                self.current_tactic.pretty_print()
                 return []
             else:
                 # Continue search if no tactic found
@@ -257,7 +257,7 @@ class TacticsEngine:
             # Engine getting checkmated line
             if best_score < -5000 and TACTIC_TYPES["Checkmate"] in self.tactic_types:
                 self.current_tactic = Tactic(sequence + analysis[0]["pv"], best_score, TACTIC_TYPES["Checkmate"])
-                #self.current_tactic.pretty_print()
+                self.current_tactic.pretty_print()
                 return
 
             # Engine turn
