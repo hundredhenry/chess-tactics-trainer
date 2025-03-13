@@ -55,14 +55,13 @@ class Tactic:
         print("\n")
 
 class TacticsEngine:
-    def __init__(self, engine_path: str, board: chess.Board, engine_colour: chess.Color, puzzle_mode: bool) -> None:
+    def __init__(self, engine_path: str, board: chess.Board, engine_colour: chess.Color) -> None:
         """Initialize the tactics engine."""
         self.board = board
         self.engine_path = engine_path
         self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
         self.engine.configure({"Threads": 8})
         self.engine_colour = engine_colour
-        self.puzzle_mode = puzzle_mode
         self.current_tactic = None
         self.tactic_types = list(TACTIC_TYPES.values())
 
@@ -180,9 +179,6 @@ class TacticsEngine:
     def end_tactic(self) -> None:
         """End the current tactic."""
         self.current_tactic = None
-        if self.puzzle_mode and len(self.board.move_stack) > 1:
-            self.puzzle_mode = False
-
         self.tactic_search()
 
     def _process_engine_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_stack: list, best_score: int) -> list:
@@ -191,7 +187,7 @@ class TacticsEngine:
             pv = infodict["pv"]
             score = infodict["score"].pov(self.engine_colour).score(mate_score=100000)
             # For initial position, consider deliberate mistakes to create tactical opportunities
-            if depth == 0 and not self.puzzle_mode:
+            if depth == 0:
                 min_bound = best_score - self.bounds['min_mistake']
                 max_bound = best_score - self.bounds['max_mistake']
                 if min_bound <= score < max_bound:
@@ -247,7 +243,7 @@ class TacticsEngine:
                 continue
 
             # If inital position and no mistake made yet, consider more moves
-            if depth == 0 and board.turn == self.engine_colour and not self.puzzle_mode:
+            if depth == 0 and board.turn == self.engine_colour:
                 num_pv = board.legal_moves.count()
             else:
                 num_pv = min(board.legal_moves.count(), self.num_pv)
@@ -295,7 +291,7 @@ class TacticsEngine:
 
         return -1, -1
     
-    def reset_engine(self, board: chess.Board, engine_colour: chess.Color, puzzle_mode: bool) -> None:
+    def reset_engine(self, board: chess.Board, engine_colour: chess.Color) -> None:
         """Reset the engine with a new board and colour."""
         self.engine.quit()
         self.board = board
@@ -303,7 +299,6 @@ class TacticsEngine:
         self.engine.configure({"Threads": 8})
         self.engine_colour = engine_colour
         self.current_tactic = None
-        self.puzzle_mode = puzzle_mode
 
     def close(self) -> None:
         """Close the engine process."""

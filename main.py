@@ -100,7 +100,10 @@ class ChessGame:
             "move_check": pygame.mixer.Sound("sounds/move-check.mp3"),
             "capture": pygame.mixer.Sound("sounds/capture.mp3"),
             "promote": pygame.mixer.Sound("sounds/promote.mp3"),
-            "move_self": pygame.mixer.Sound("sounds/move-self.mp3")
+            "move_self": pygame.mixer.Sound("sounds/move-self.mp3"),
+            "tactic_complete": pygame.mixer.Sound("sounds/tactic-complete.mp3"),
+            "correct": pygame.mixer.Sound("sounds/correct.mp3"),
+            "incorrect": pygame.mixer.Sound("sounds/incorrect.mp3")
         }
 
     def _init_board(self, fen: str = chess.STARTING_FEN) -> None:
@@ -112,7 +115,7 @@ class ChessGame:
     
     def _init_engine(self, difficulty: int, tactic_types: list[int]) -> None:
         """Initialize the chess engine with specified difficulty and tactic types."""
-        self.engine = TacticsEngine(ENGINE_PATH, self.board, not self.player_colour, self.puzzle_mode)
+        self.engine = TacticsEngine(ENGINE_PATH, self.board, not self.player_colour)
         self.engine.set_difficulty(difficulty)
         self.engine.set_tactic_types(tactic_types)
     
@@ -339,8 +342,14 @@ class ChessGame:
 
                     # Update tactic state
                     if self.engine.current_tactic:
-                        if self.engine.current_tactic.next_move() != move or self.engine.current_tactic.index > self.engine.current_tactic.max_index:
+                        if self.engine.current_tactic.next_move() != move:
+                            self.sounds["incorrect"].play()
                             self.engine.end_tactic()
+                        elif self.engine.current_tactic.index > self.engine.current_tactic.max_index:
+                            self.sounds["tactic_complete"].play()
+                            self.engine.end_tactic()
+                        else:
+                            self.sounds["correct"].play()
 
                 except chess.IllegalMoveError:
                     # Select a different piece if clicked on another valid piece
@@ -379,7 +388,7 @@ class ChessGame:
             self.player_colour = self.board.turn
             
             # Reset engine for new puzzle
-            self.engine.reset_engine(self.board, not self.player_colour, self.puzzle_mode)
+            self.engine.reset_engine(self.board, not self.player_colour)
             self.engine.tactic_search()
             self._update_board()
 
@@ -448,7 +457,7 @@ class ChessGame:
             else:
                 self._init_board()
 
-            self.engine.reset_engine(self.board, not self.player_colour, self.puzzle_mode)
+            self.engine.reset_engine(self.board, not self.player_colour)
             if self.puzzle_mode:
                 self.engine.tactic_search()
             
