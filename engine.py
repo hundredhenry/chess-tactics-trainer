@@ -79,19 +79,19 @@ class TacticsEngine:
             self.num_pv = 5
             self.engine_depth = 6
             self.search_depth = 12
-            self.bounds = {'tactic': -300, 'min_mistake': 320, 'max_mistake': 200, 'advantage': 200}
+            self.bounds = {'tactic': -250, 'min_mistake': 350, 'max_mistake': 150, 'advantage': 200}
         # Medium
         elif value == 1:
             self.num_pv = 3
             self.engine_depth = 10
             self.search_depth = 8
-            self.bounds = {'tactic': -200, 'min_mistake': 200, 'max_mistake': 150, 'advantage': 200}
+            self.bounds = {'tactic': -200, 'min_mistake': 250, 'max_mistake': 150, 'advantage': 200}
         # Hard
         else:
             self.num_pv = 1
             self.engine_depth = 14
             self.search_depth = 4
-            self.bounds = {'tactic': -200, 'min_mistake': 180, 'max_mistake': 150, 'advantage': 150}
+            self.bounds = {'tactic': -200, 'min_mistake': 200, 'max_mistake': 150, 'advantage': 150}
         
         self.limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
 
@@ -195,7 +195,7 @@ class TacticsEngine:
                     next_board.push(pv[0])
                     search_stack.append((next_board, depth + 1, sequence + [pv[0]]))
             # Otherwise, play normal moves (slightly suboptimal moves are acceptable)
-            elif score >= best_score - 25:
+            elif score >= best_score - 15:
                 next_board = board.copy(stack=1)
                 next_board.push(pv[0])
                 search_stack.append((next_board, depth + 1, sequence + [pv[0]]))
@@ -205,10 +205,10 @@ class TacticsEngine:
     def _process_player_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_stack: list, best_score: int) -> list:
         """Process player moves in the search stack."""
         best_move_clear = False
-        if len(analysis) == 1 and best_score <= -self.bounds['advantage']:
-            best_move_clear = True
+        if len(analysis) == 1:
+            best_move_clear = best_score <= -self.bounds['advantage']
         elif len(analysis) >= 2:
-            second_score = analysis[1]["score"].pov(not self.engine_colour).score(mate_score=100000)
+            second_score = analysis[1]["score"].pov(self.engine_colour).score(mate_score=100000)
             best_move_clear = best_score <= second_score - self.bounds['advantage']
 
         # If there's a clear best move, check for tactics
@@ -237,7 +237,7 @@ class TacticsEngine:
         search_stack = [(initial_board, 0, [])]
 
         while search_stack:
-            board, depth, sequence = search_stack.pop()
+            board, depth, sequence = search_stack.pop(0)
             # Base case for search - depth reached or game over
             if depth == self.search_depth or board.is_game_over():
                 continue
@@ -247,7 +247,7 @@ class TacticsEngine:
                 num_pv = board.legal_moves.count()
             else:
                 num_pv = min(board.legal_moves.count(), self.num_pv)
-
+            
             analysis = self.engine.analyse(board, self.limit, multipv=num_pv)
             best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
             # Engine getting checkmated line
@@ -397,14 +397,13 @@ class TacticSearch:
         last_position = board.copy()
         last_position.pop()
         # Find all pieces except kings and pawns
-        valuable_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
-        pinable_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
+        filtered_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
 
         # Check valuable pieces that could be targets for relative pins
-        for valued_square in chess.scan_reversed(valuable_pieces):
+        for valued_square in chess.scan_reversed(filtered_pieces):
             valuable = board.piece_at(valued_square)
             # Search through all potential pinned pieces for this piece
-            for pin_square in chess.scan_reversed(pinable_pieces):
+            for pin_square in chess.scan_reversed(filtered_pieces):
                 # Skip if the piece is the same
                 if valued_square == pin_square:
                     continue
