@@ -97,11 +97,10 @@ class ChessGame:
     def _load_sounds(self) -> dict:
         """Load chess move sound effects."""
         return {
-            "move_check": pygame.mixer.Sound("sounds/move-check.mp3"),
             "capture": pygame.mixer.Sound("sounds/capture.mp3"),
-            "promote": pygame.mixer.Sound("sounds/promote.mp3"),
-            "move_self": pygame.mixer.Sound("sounds/move-self.mp3"),
-            "tactic_complete": pygame.mixer.Sound("sounds/tactic-complete.mp3"),
+            "move": pygame.mixer.Sound("sounds/move.mp3"),
+            "complete": pygame.mixer.Sound("sounds/complete.mp3"),
+            "notify": pygame.mixer.Sound("sounds/notify.mp3"),
             "correct": pygame.mixer.Sound("sounds/correct.mp3"),
             "incorrect": pygame.mixer.Sound("sounds/incorrect.mp3")
         }
@@ -289,14 +288,10 @@ class ChessGame:
 
     def _play_move_sound(self, move: chess.Move) -> None:
         """Play sound effect based on the move type."""
-        if self.board.gives_check(move):
-            self.sounds["move_check"].play()
-        elif self.board.is_capture(move):
+        if self.board.is_capture(move):
             self.sounds["capture"].play()
-        elif move.promotion:
-            self.sounds["promote"].play()
         else:
-            self.sounds["move_self"].play()
+            self.sounds["move"].play()
 
     def _handle_click(self, pos: tuple[int, int]) -> None:
         """Handle mouse click on the chess board."""
@@ -346,7 +341,7 @@ class ChessGame:
                             self.sounds["incorrect"].play()
                             self.engine.end_tactic()
                         elif self.engine.current_tactic.index > self.engine.current_tactic.max_index:
-                            self.sounds["tactic_complete"].play()
+                            self.sounds["complete"].play()
                             self.engine.end_tactic()
                         else:
                             self.sounds["correct"].play()
