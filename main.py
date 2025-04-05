@@ -194,14 +194,20 @@ class ChessGame:
         # Draw the board and pieces
         for row in range(8):
             for col in range(8):
-                # Adjust coordinates based on player color perspective
-                visual_row = 7 - row if self.player_colour == chess.WHITE else row
-                visual_col = col if self.player_colour == chess.WHITE else 7 - col
-
                 # Get square information
-                square = chess.square(visual_col, visual_row)
-                square_color = COLOURS["LIGHT_SQUARE"] if (visual_row + visual_col) % 2 == 0 else COLOURS["DARK_SQUARE"]
-                square_x, square_y = col * self.square_size, row * self.square_size
+                square = chess.square(col, row)
+                if (row + col) % 2 == 0:
+                    square_color = COLOURS["DARK_SQUARE"]
+                else:
+                    square_color = COLOURS["LIGHT_SQUARE"]
+
+                # Pygame coordinates start at (0, 0) in the top left corner
+                if self.player_colour == chess.WHITE:
+                    square_x = col * self.square_size
+                    square_y = (7 - row) * self.square_size
+                else:
+                    square_x = (7 - col) * self.square_size
+                    square_y = row * self.square_size
 
                 # Draw square
                 pygame.draw.rect(
