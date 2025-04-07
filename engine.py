@@ -77,21 +77,21 @@ class TacticsEngine:
         # Easy
         if value == 0:
             self.num_pv = 5
-            self.engine_depth = 6
+            self.engine_depth = 8
             self.search_depth = 12
-            self.bounds = {'tactic': -250, 'min_mistake': 350, 'max_mistake': 150, 'advantage': 200}
+            self.bounds = {'tactic': -250, 'min_mistake': 400, 'max_mistake': -200, 'advantage': 150}
         # Medium
         elif value == 1:
             self.num_pv = 3
-            self.engine_depth = 10
+            self.engine_depth = 12
             self.search_depth = 8
-            self.bounds = {'tactic': -200, 'min_mistake': 250, 'max_mistake': 150, 'advantage': 200}
+            self.bounds = {'tactic': -200, 'min_mistake': 300, 'max_mistake': -150, 'advantage': 150}
         # Hard
         else:
             self.num_pv = 1
-            self.engine_depth = 14
+            self.engine_depth = 16
             self.search_depth = 4
-            self.bounds = {'tactic': -200, 'min_mistake': 200, 'max_mistake': 150, 'advantage': 150}
+            self.bounds = {'tactic': -200, 'min_mistake': 250, 'max_mistake': -150, 'advantage': 150}
         
         self.limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
 
@@ -112,7 +112,7 @@ class TacticsEngine:
         second_score = analysis[1]["score"].pov(self.engine_colour).score(mate_score=100000)
 
         # If best move is significantly better, return it
-        if best_score >= second_score + self.bounds['advantage']:
+        if best_score >= second_score + 200:
             return current_move
         else:
             return None
@@ -187,15 +187,15 @@ class TacticsEngine:
             pv = infodict["pv"]
             score = infodict["score"].pov(self.engine_colour).score(mate_score=100000)
             # For initial position, consider deliberate mistakes to create tactical opportunities
-            if depth == 0:
+            if depth <= 2:
                 min_bound = best_score - self.bounds['min_mistake']
                 max_bound = best_score - self.bounds['max_mistake']
-                if min_bound <= score < max_bound:
+                if score >= min_bound and score <= max_bound:
                     next_board = board.copy(stack=1)
                     next_board.push(pv[0])
                     search_stack.append((next_board, depth + 1, sequence + [pv[0]]))
             # Otherwise, play normal moves (slightly suboptimal moves are acceptable)
-            elif score >= best_score - 15:
+            elif score >= best_score - 30:
                 next_board = board.copy(stack=1)
                 next_board.push(pv[0])
                 search_stack.append((next_board, depth + 1, sequence + [pv[0]]))
@@ -243,7 +243,7 @@ class TacticsEngine:
                 continue
 
             # If inital position and no mistake made yet, consider more moves
-            if depth == 0 and board.turn == self.engine_colour:
+            if depth <= 2 and board.turn == self.engine_colour:
                 num_pv = board.legal_moves.count()
             else:
                 num_pv = min(board.legal_moves.count(), self.num_pv)
@@ -275,16 +275,16 @@ class TacticsEngine:
                     forked_pieces = TacticSearch.fork(temp_board)
                     if forked_pieces:
                         return index, TACTIC_TYPES["Fork"]
+                    
+                if TACTIC_TYPES["Relative Pin"] in self.tactic_types:
+                    relative_pins = TacticSearch.relative_pin(temp_board)
+                    if relative_pins:
+                        return index, TACTIC_TYPES["Relative Pin"]
                         
                 if TACTIC_TYPES["Absolute Pin"] in self.tactic_types:
                     pinned_pieces = TacticSearch.absolute_pin(temp_board)
                     if pinned_pieces:
                         return index, TACTIC_TYPES["Absolute Pin"]
-                        
-                if TACTIC_TYPES["Relative Pin"] in self.tactic_types:
-                    relative_pins = TacticSearch.relative_pin(temp_board)
-                    if relative_pins:
-                        return index, TACTIC_TYPES["Relative Pin"]
                 
             # Apply the move and continue
             temp_board.push(move)

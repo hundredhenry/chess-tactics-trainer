@@ -23,7 +23,8 @@ COLOURS = {
     "GAME_OVER_TEXT": pygame.Color(0, 0, 0)
 }
 
-ENGINE_PATH = "./stockfish-windows-x86-64-bmi2.exe"
+ENGINE_PATH = "./engines/stockfish-windows-x86-64-bmi2.exe"
+PUZZLE_PATH = "./puzzles/puzzles.csv"
 
 @dataclass
 class Puzzle:
@@ -351,7 +352,6 @@ class ChessGame:
                             self.engine.end_tactic()
                         else:
                             self.sounds["correct"].play()
-
                 except chess.IllegalMoveError:
                     # Select a different piece if clicked on another valid piece
                     if piece and piece.color == self.board.turn:
@@ -551,7 +551,7 @@ class ChessGame:
         """Run the puzzle demo mode."""
         self.puzzle_mode = True
         # Load the FENs and moves from the puzzles.csv file
-        with open("puzzles.csv", 'r') as file:
+        with open(PUZZLE_PATH, 'r') as file:
             lines = file.readlines()
             for line in lines:
                 tactic_type, fen, moves = line.strip().split(',')
@@ -560,27 +560,25 @@ class ChessGame:
 
         self._run()
 
-    def _create_menus(self) -> None:
+    def _create_menus(self) -> dict:
         """Create the game menus."""
         menus = {}
+        menu_theme = pygame_menu.Theme(
+            fps=60,
+            title_font_size=64
+        )
         
         # Create menu instances
         menus["main"] = pygame_menu.Menu(
             "Chess Tactics Trainer", 
             self.width, self.height, 
-            theme=pygame_menu.themes.THEME_DEFAULT
+            theme=menu_theme
         )
         
         menus["game"] = pygame_menu.Menu(
             "Game Configuration", 
             self.width, self.height, 
-            theme=pygame_menu.themes.THEME_DEFAULT
-        )
-        
-        menus["settings"] = pygame_menu.Menu(
-            "Settings", 
-            self.width, self.height, 
-            theme=pygame_menu.themes.THEME_DEFAULT
+            theme=menu_theme
         )
 
         # Main menu options
@@ -593,14 +591,13 @@ class ChessGame:
         
         menus["main"].add.button("Start", menus["game"], **button_style)
         menus["main"].add.button("Puzzle Demo", self._puzzle_demo, **button_style)
-        menus["main"].add.button("Settings", menus["settings"], **button_style)
         menus["main"].add.button("Quit", pygame_menu.events.EXIT, **button_style)
 
         # Game settings menu
         game_style = {
-            "align": pygame_menu.locals.ALIGN_RIGHT,
-            "font_size": 40,
-            "margin": (-75, 25),
+            "align": pygame_menu.locals.ALIGN_CENTER,
+            "font_size": 48,
+            "margin": (0, 25),
             "selection_effect": None
         }
         
@@ -640,7 +637,8 @@ class ChessGame:
             self._run, 
             font_size=64, 
             margin=(0, 50), 
-            selection_effect=None
+            selection_effect=None,
+            align=pygame_menu.locals.ALIGN_CENTER
         )
         
         return menus
