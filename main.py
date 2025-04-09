@@ -264,7 +264,8 @@ class ChessGame:
             TACTIC_TYPES["Checkmate"]: f'Mate in {num_moves} moves',
             TACTIC_TYPES["Fork"]: f'Fork in {num_moves} moves',
             TACTIC_TYPES["Absolute Pin"]: f'Absolute Pin in {num_moves} moves',
-            TACTIC_TYPES["Relative Pin"]: f'Relative Pin in {num_moves} moves'
+            TACTIC_TYPES["Relative Pin"]: f'Relative Pin in {num_moves} moves',
+            TACTIC_TYPES["Skewer"]: f'Skewer in {num_moves} moves'
         }
         message = tactic_messages.get(self.engine.current_tactic.type, '')
         text = font.render(message, True, COLOURS["TEXT"])
@@ -616,7 +617,8 @@ class ChessGame:
                 ("Checkmate", TACTIC_TYPES["Checkmate"]), 
                 ("Fork", TACTIC_TYPES["Fork"]), 
                 ("Absolute Pin", TACTIC_TYPES["Absolute Pin"]), 
-                ("Relative Pin", TACTIC_TYPES["Relative Pin"])
+                ("Relative Pin", TACTIC_TYPES["Relative Pin"]),
+                ("Skewer", TACTIC_TYPES["Skewer"]), 
             ],
             default=list(TACTIC_TYPES.values()),
             onchange=self._set_tactic_types,

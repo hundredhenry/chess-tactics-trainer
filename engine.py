@@ -16,7 +16,8 @@ TACTIC_TYPES = {
     "Checkmate": 0,
     "Fork": 1,
     "Absolute Pin": 2,
-    "Relative Pin": 3
+    "Relative Pin": 3,
+    "Skewer": 4
 }
 
 class Tactic:
@@ -118,7 +119,7 @@ class TacticsEngine:
             return None
     
     def _select_normal_move(self, analysis: list[dict]) -> chess.Move:      
-        current_move = analysis[0]["pv"][0]  
+        current_move = analysis[0]["pv"][0]
         """Selects the least winning based on the position evaluation."""
         for infodict in analysis[1:]:
             pv = infodict["pv"]
@@ -145,8 +146,7 @@ class TacticsEngine:
         if self.current_tactic:
             return self._select_tactic_move()
 
-        num_pv = max(self.num_pv, 2)
-        analysis = self.engine.analyse(self.board, self.limit, multipv=num_pv)
+        analysis = self.engine.analyse(self.board, self.limit, multipv=5)
         best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
         # Checkmate line for engine
         if best_score > 5000:
@@ -187,7 +187,7 @@ class TacticsEngine:
             pv = infodict["pv"]
             score = infodict["score"].pov(self.engine_colour).score(mate_score=100000)
             # For initial position, consider deliberate mistakes to create tactical opportunities
-            if depth <= 2:
+            if depth == 0:
                 min_bound = best_score - self.bounds['min_mistake']
                 max_bound = best_score - self.bounds['max_mistake']
                 if score >= min_bound and score <= max_bound:
@@ -243,7 +243,7 @@ class TacticsEngine:
                 continue
 
             # If inital position and no mistake made yet, consider more moves
-            if depth <= 2 and board.turn == self.engine_colour:
+            if depth == 0 and board.turn == self.engine_colour:
                 num_pv = board.legal_moves.count()
             else:
                 num_pv = min(board.legal_moves.count(), self.num_pv)
@@ -275,6 +275,11 @@ class TacticsEngine:
                     forked_pieces = TacticSearch.fork(temp_board)
                     if forked_pieces:
                         return index, TACTIC_TYPES["Fork"]
+                    
+                if TACTIC_TYPES["Skewer"] in self.tactic_types:
+                    skewered_pieces = TacticSearch.skewer(temp_board)
+                    if skewered_pieces:
+                        return index, TACTIC_TYPES["Skewer"]
                     
                 if TACTIC_TYPES["Relative Pin"] in self.tactic_types:
                     relative_pins = TacticSearch.relative_pin(temp_board)
@@ -369,14 +374,12 @@ class TacticSearch:
             # If the pin was not present in the last position, move is a new pin
             if pinning_square != None and last_pos_pin == None:
                 pinning_piece = board.piece_at(pinning_square)
-                
-                # Add to pinned_pieces if this is a valid relative pin
                 is_valid_pin = True
                 
                 # Check if the pin can be broken by capturing the pinning piece
                 for move in board.legal_moves:
                     if move.to_square == pinning_square:
-                        # If pinned piece can be captured by a less valuable piece, not a good pin
+                        # If pinning piece can be captured by a less valuable piece, not a good pin
                         if (PIECE_VALUES[board.piece_at(move.from_square).piece_type] < PIECE_VALUES[pinning_piece.piece_type] or
                             board.piece_at(move.from_square).piece_type == chess.KING):
                             is_valid_pin = False
@@ -384,8 +387,9 @@ class TacticSearch:
                 
                 if is_valid_pin:
                     pinned_pieces.append(square)
+                    return pinned_pieces
 
-        return pinned_pieces
+        return []
     
     @staticmethod
     def relative_pin(board: chess.Board) -> list:
@@ -421,7 +425,8 @@ class TacticSearch:
                 if pinning_square != None and last_pos_pin == None:
                     pinning = board.piece_at(pinning_square)
                     defenders = board.attackers(board.turn, valued_square)
-                    # Skip if the pinned piece is defended and the pinning piece is worth more than or equal to the valuable piece
+
+                    # Skip if the pinned piece is defended and the pinning piece is worth more than or equal to valuable piece
                     if len(defenders) > 0 and PIECE_VALUES[pinning.piece_type] >= PIECE_VALUES[valuable.piece_type]:
                         continue
                              
@@ -432,13 +437,60 @@ class TacticSearch:
                             if (PIECE_VALUES[board.piece_at(move.from_square).piece_type] < PIECE_VALUES[pinning.piece_type] or
                                 board.piece_at(move.from_square).piece_type == chess.KING):
                                 is_valid_pin = False
-                                # Break out of for loop, move onto next pinned piece
                                 break
                     
                     if is_valid_pin:
                         pinned_pieces.append(pin_square)
+                        return pinned_pieces
 
-        return pinned_pieces
+        return []
+    
+    @staticmethod
+    def skewer(board: chess.Board) -> list:
+        if not board.move_stack:
+            return []
+        
+        skewered_pieces = []
+        # Find all pieces except pawns
+        filtered_pieces = board.occupied_co[board.turn] & ~board.pawns
+
+        for skewered_square in chess.scan_reversed(filtered_pieces):
+            skewered = board.piece_at(skewered_square)
+
+            for valued_square in chess.scan_reversed(filtered_pieces):
+                valued = board.piece_at(valued_square)
+                # Skip if the piece is the same
+                if skewered_square == valued_square:
+                    continue
+
+                # Skip if the skewered piece is worth more than the valuable piece
+                if PIECE_VALUES[skewered.piece_type] > PIECE_VALUES[valued.piece_type]:
+                    continue
+
+                pinning_square = TacticSearch.relative_pinner(board, board.turn, valued_square, skewered_square)
+                if pinning_square != None:
+                    pinning = board.piece_at(pinning_square)
+                    # Skip if the pinning piece is worth more than or equal to the valued piece
+                    if PIECE_VALUES[pinning.piece_type] >= PIECE_VALUES[valued.piece_type]:
+                        continue
+
+                    # Skip if the pinning piece is worth less than the skewered piece
+                    if PIECE_VALUES[pinning.piece_type] < PIECE_VALUES[skewered.piece_type]:
+                        continue
+
+                    defenders = board.attackers(board.turn, skewered_square)
+                    # Do not consider if the skewered piece is defended by the valued piece
+                    if valued_square in defenders:
+                        if len(defenders) > 1:
+                            continue
+                    else:
+                        if len(defenders) > 0:
+                            continue
+
+                    skewered_pieces.append(skewered_square)
+                    return skewered_pieces
+
+        return []
     
     @staticmethod
     def king_fork_exception(board: chess.Board, forking_move: chess.Move, attacked_pieces: set) -> bool:
