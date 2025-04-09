@@ -301,7 +301,7 @@ class ChessGame:
         else:
             self.sounds["move"].play()
 
-    def _handle_click(self, pos: tuple[int, int]) -> None:
+    def _handle_board_click(self, pos: tuple[int, int]) -> None:
         """Handle mouse click on the chess board."""
         x, y = pos
 
@@ -357,6 +357,8 @@ class ChessGame:
                     # Select a different piece if clicked on another valid piece
                     if piece and piece.color == self.board.turn:
                         self.selected_piece = square
+                    else:
+                        self.selected_piece = None
 
     def _make_engine_move(self) -> None:
         """Make the engine's move and update the board state."""
@@ -440,7 +442,7 @@ class ChessGame:
         pygame.display.update()
         return manager, ui_elements
     
-    def _handle_button_click(self, event: pygame.event.Event, ui_elements: dict) -> bool:
+    def _handle_ui_click(self, event: pygame.event.Event, ui_elements: dict) -> bool:
         """Handle UI button click events."""
         # Handle hint
         if event.ui_element == ui_elements["hint_button"]:
@@ -530,9 +532,9 @@ class ChessGame:
                     exit()
                     
                 if event.type == pygame_gui.UI_BUTTON_PRESSED:
-                    running = self._handle_button_click(event, ui_elements)
+                    running = self._handle_ui_click(event, ui_elements)
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    self._handle_click(event.pos)
+                    self._handle_board_click(event.pos)
                     self._update_board()
                 
                 manager.process_events(event)

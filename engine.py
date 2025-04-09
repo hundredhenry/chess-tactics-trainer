@@ -1,3 +1,4 @@
+import os
 import chess
 import chess.engine
 
@@ -61,7 +62,7 @@ class TacticsEngine:
         self.board = board
         self.engine_path = engine_path
         self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
-        self.engine.configure({"Threads": 8})
+        self.optimum_engine_settings()
         self.engine_colour = engine_colour
         self.current_tactic = None
         self.tactic_types = list(TACTIC_TYPES.values())
@@ -72,6 +73,13 @@ class TacticsEngine:
         self.search_depth = None
         self.bounds = {}
         self.limit = None
+
+    def optimum_engine_settings(self) -> None:
+        """Set the engine settings to optimum values depending on the system."""
+        logical_core_count = os.cpu_count() - 1
+        hash_size_per_core = 64  # MiB
+        max_hash_size = logical_core_count * hash_size_per_core
+        self.engine.configure({"Threads": logical_core_count, "Hash": max_hash_size})
 
     def set_difficulty(self, value: int) -> None:
         """Configure engine parameters based on difficulty level."""
@@ -301,7 +309,7 @@ class TacticsEngine:
         self.engine.quit()
         self.board = board
         self.engine = chess.engine.SimpleEngine.popen_uci(self.engine_path)
-        self.engine.configure({"Threads": 8})
+        self.optimum_engine_settings()
         self.engine_colour = engine_colour
         self.current_tactic = None
 
@@ -379,8 +387,13 @@ class TacticSearch:
                 # Check if the pin can be broken by capturing the pinning piece
                 for move in board.legal_moves:
                     if move.to_square == pinning_square:
-                        # If pinning piece can be captured by a less valuable piece, not a good pin
-                        if (PIECE_VALUES[board.piece_at(move.from_square).piece_type] < PIECE_VALUES[pinning_piece.piece_type] or
+                        pinning_defenders = board.attackers(board.turn, pinning_square)
+                        if len(pinning_defenders) == 0:
+                            is_valid_pin = False
+                            break
+                        
+                       # Check if the pin can be broken by capturing the pinning piece with a less or equal valuable piece
+                        if (PIECE_VALUES[board.piece_at(move.from_square).piece_type] <= PIECE_VALUES[pinning_piece.piece_type] or
                             board.piece_at(move.from_square).piece_type == chess.KING):
                             is_valid_pin = False
                             break
@@ -424,17 +437,20 @@ class TacticSearch:
                 # If the pin was not present in the last position, move is a new pin
                 if pinning_square != None and last_pos_pin == None:
                     pinning = board.piece_at(pinning_square)
-                    defenders = board.attackers(board.turn, valued_square)
-
-                    # Skip if the pinned piece is defended and the pinning piece is worth more than or equal to valuable piece
-                    if len(defenders) > 0 and PIECE_VALUES[pinning.piece_type] >= PIECE_VALUES[valuable.piece_type]:
+                    # Skip if the pinning piece is worth more than or equal to valuable piece
+                    if PIECE_VALUES[pinning.piece_type] >= PIECE_VALUES[valuable.piece_type]:
                         continue
                              
                     is_valid_pin = True
-                    # Check if the pin can be broken by capturing the pinning piece with a less valuable piece
+                    # Check if the pin can be broken by capturing the pinning piece with a less or equal valuable piece
                     for move in board.legal_moves:
                         if move.to_square == pinning_square:
-                            if (PIECE_VALUES[board.piece_at(move.from_square).piece_type] < PIECE_VALUES[pinning.piece_type] or
+                            pinning_defenders = board.attackers(board.turn, pinning_square)
+                            if len(pinning_defenders) == 0:
+                                is_valid_pin = False
+                                break
+
+                            if (PIECE_VALUES[board.piece_at(move.from_square).piece_type] <= PIECE_VALUES[pinning.piece_type] or
                                 board.piece_at(move.from_square).piece_type == chess.KING):
                                 is_valid_pin = False
                                 break
@@ -478,17 +494,34 @@ class TacticSearch:
                     if PIECE_VALUES[pinning.piece_type] < PIECE_VALUES[skewered.piece_type]:
                         continue
 
-                    defenders = board.attackers(board.turn, skewered_square)
+                    # Skip if the skewered piece is defended
+                    skewered_defenders = board.attackers(board.turn, skewered_square)
                     # Do not consider if the skewered piece is defended by the valued piece
-                    if valued_square in defenders:
-                        if len(defenders) > 1:
+                    if valued_square in skewered_defenders:
+                        if len(skewered_defenders) > 1:
                             continue
                     else:
-                        if len(defenders) > 0:
+                        if len(skewered_defenders) > 0:
                             continue
 
-                    skewered_pieces.append(skewered_square)
-                    return skewered_pieces
+                    is_valid_skewer = True
+
+                    # Skip if the skewer can be broken by capturing the skewer piece with a less or equal valuable piece
+                    for move in board.legal_moves:
+                        if move.to_square == pinning_square:
+                            skewering_defenders = board.attackers(board.turn, pinning_square)
+                            if len(skewering_defenders) == 0:
+                                is_valid_skewer = False
+                                break
+                                
+                            if (PIECE_VALUES[board.piece_at(move.from_square).piece_type] <= PIECE_VALUES[pinning.piece_type] or
+                                board.piece_at(move.from_square).piece_type == chess.KING):
+                                is_valid_skewer = False
+                                break
+                    
+                    if is_valid_skewer:
+                        skewered_pieces.append(skewered_square)
+                        return skewered_pieces
 
         return []
     
