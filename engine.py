@@ -70,13 +70,13 @@ class TacticsEngine:
         # Engine settings
         self.num_pv = None
         self.engine_depth = None
-        self.search_depth = None
+        self.max_search_depth = None
         self.bounds = {}
         self.limit = None
 
     def optimum_engine_settings(self) -> None:
         """Set the engine settings to optimum values depending on the system."""
-        logical_core_count = os.cpu_count() - 1
+        logical_core_count = os.cpu_count()
         hash_size_per_core = 64  # MiB
         max_hash_size = logical_core_count * hash_size_per_core
         self.engine.configure({"Threads": logical_core_count, "Hash": max_hash_size})
@@ -87,19 +87,19 @@ class TacticsEngine:
         if value == 0:
             self.num_pv = 5
             self.engine_depth = 8
-            self.search_depth = 12
+            self.max_search_depth = 12
             self.bounds = {'tactic': -250, 'min_mistake': 400, 'max_mistake': -200, 'advantage': 150}
         # Medium
         elif value == 1:
             self.num_pv = 3
             self.engine_depth = 12
-            self.search_depth = 8
+            self.max_search_depth = 8
             self.bounds = {'tactic': -200, 'min_mistake': 300, 'max_mistake': -150, 'advantage': 150}
         # Hard
         else:
             self.num_pv = 1
             self.engine_depth = 16
-            self.search_depth = 4
+            self.max_search_depth = 4
             self.bounds = {'tactic': -200, 'min_mistake': 250, 'max_mistake': -150, 'advantage': 150}
         
         self.limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
@@ -189,7 +189,7 @@ class TacticsEngine:
         self.current_tactic = None
         self.tactic_search()
 
-    def _process_engine_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_stack: list, best_score: int) -> list:
+    def _process_engine_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_queue: list, best_score: int) -> list:
         """Process engine moves in the search stack."""
         for infodict in analysis:
             pv = infodict["pv"]
@@ -201,16 +201,16 @@ class TacticsEngine:
                 if score >= min_bound and score <= max_bound:
                     next_board = board.copy(stack=1)
                     next_board.push(pv[0])
-                    search_stack.append((next_board, depth + 1, sequence + [pv[0]]))
+                    search_queue.append((next_board, depth + 1, sequence + [pv[0]]))
             # Otherwise, play normal moves (slightly suboptimal moves are acceptable)
             elif score >= best_score - 30:
                 next_board = board.copy(stack=1)
                 next_board.push(pv[0])
-                search_stack.append((next_board, depth + 1, sequence + [pv[0]]))
+                search_queue.append((next_board, depth + 1, sequence + [pv[0]]))
             
-        return search_stack
+        return search_queue
 
-    def _process_player_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_stack: list, best_score: int) -> list:
+    def _process_player_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_queue: list, best_score: int) -> list:
         """Process player moves in the search stack."""
         best_move_clear = False
         if len(analysis) == 1:
@@ -235,19 +235,19 @@ class TacticsEngine:
                 return []
             else:
                 # Continue search if no tactic found
-                search_stack.append((next_board, depth + 1, sequence + [best_move]))
+                search_queue.append((next_board, depth + 1, sequence + [best_move]))
         
-        return search_stack
+        return search_queue
 
     def tactic_search(self) -> None:
         """Search for tactical opportunities in the current position."""
         initial_board = self.board.copy(stack=1)
-        search_stack = [(initial_board, 0, [])]
+        search_queue = [(initial_board, 0, [])] 
 
-        while search_stack:
-            board, depth, sequence = search_stack.pop(0)
-            # Base case for search - depth reached or game over
-            if depth == self.search_depth or board.is_game_over():
+        while search_queue:
+            board, depth, sequence = search_queue.pop(0)
+            # Base case for search - max depth reached or game over
+            if depth == self.max_search_depth or board.is_game_over():
                 continue
 
             # If inital position and no mistake made yet, consider more moves
@@ -266,10 +266,10 @@ class TacticsEngine:
 
             # Engine turn
             if board.turn == self.engine_colour:
-                search_stack = self._process_engine_moves(board, depth, sequence, analysis, search_stack, best_score)
+                search_queue = self._process_engine_moves(board, depth, sequence, analysis, search_queue, best_score)
             # Human turn
             else:
-                search_stack = self._process_player_moves(board, depth, sequence, analysis, search_stack, best_score)
+                search_queue = self._process_player_moves(board, depth, sequence, analysis, search_queue, best_score)
 
     def _pv_tactic_check(self, board: chess.Board, pv: list) -> tuple:
         """Check if the given move sequence contains a tactical opportunity."""
