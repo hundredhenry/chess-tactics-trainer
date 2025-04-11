@@ -13,10 +13,11 @@ COLOURS = {
     "LIGHT_SQUARE": pygame.Color(240, 217, 181),
     "DARK_SQUARE": pygame.Color(181, 136, 99),
     "HIGHLIGHT_MOVE": pygame.Color(115, 130, 85, 128),
-    "HIGHLIGHT_PIECE": pygame.Color(115, 130, 85, 255),
+    "HIGHLIGHT_PIECE": pygame.Color(255, 237, 41, 128),
     "LAST_MOVE": pygame.Color(189, 186, 83, 128),
     "CAPTURE": pygame.Color(204, 0, 0, 128),
-    "HINT": pygame.Color(49, 120, 115, 128),
+    "CHECK": pygame.Color(204, 0, 0, 255),
+    "HINT": pygame.Color(255, 237, 41, 128),
     "BACKGROUND": pygame.Color(66, 69, 73),
     "TEXT": pygame.Color(255, 255, 255),
     "NOTATION_TEXT": pygame.Color(0, 0, 0),
@@ -63,7 +64,9 @@ class ChessGame:
         self.piece_symbols = {
             'P': 'wp', 'p': 'bp', 'R': 'wr', 'r': 'br',
             'N': 'wn', 'n': 'bn', 'B': 'wb', 'b': 'bb',
-            'Q': 'wq', 'q': 'bq', 'K': 'wk', 'k': 'bk'
+            'Q': 'wq', 'q': 'bq', 'K': 'wk', 'k': 'bk',
+            'gP': 'p', 'gR': 'r', 'gN': 'n', 'gB': 'b',
+            'gQ': 'q', 'gK': 'k'
         }
         
         # Load piece images and sounds
@@ -140,6 +143,44 @@ class ChessGame:
         if piece_image:
             self.window.blit(piece_image, pygame.Rect(x, y, self.square_size, self.square_size))
 
+    def _glow_piece(self, square: chess.Square, x: int, y: int, colour: pygame.Color) -> None:
+        """Draw a glow piece on the square."""
+        piece = self.board.piece_at(square)
+        piece_symbol = 'g' + piece.symbol().upper()
+        piece_image = self.images.get(self.piece_symbols[piece_symbol])
+        copy_image = piece_image.copy()
+
+        if piece_image:
+            # Fill piece image with the glow color
+            copy_image.fill(colour, special_flags=pygame.BLEND_RGBA_MULT)
+
+            # Draw the piece image on the board
+            self.window.blit(copy_image, pygame.Rect(x, y, self.square_size, self.square_size))
+
+    def _draw_hint_arrow(self, from_square: chess.Square, to_square: chess.Square) -> None:
+        """Draw an arrow hint from one square to another."""
+        from_x, from_y = chess.square_file(from_square), chess.square_rank(from_square)
+        to_x, to_y = chess.square_file(to_square), chess.square_rank(to_square)
+
+        # Adjust coordinates for player perspective
+        if self.player_colour == chess.WHITE:
+            from_x, from_y = from_x * self.square_size, (7 - from_y) * self.square_size
+            to_x, to_y = to_x * self.square_size, (7 - to_y) * self.square_size
+        else:
+            from_x, from_y = (7 - from_x) * self.square_size, from_y * self.square_size
+            to_x, to_y = (7 - to_x) * self.square_size, to_y * self.square_size
+
+        # Temporary surface
+        temp_surface = pygame.Surface(self.window.get_size(), pygame.SRCALPHA)
+
+        # Draw the arrow
+        pygame.draw.line(temp_surface, COLOURS["HINT"], (from_x + self.square_size // 2, from_y + self.square_size // 2),
+                         (to_x + self.square_size // 2, to_y + self.square_size // 2), 15)
+        pygame.draw.circle(temp_surface, COLOURS["HINT"], (to_x + self.square_size // 2, to_y + self.square_size // 2), 15)
+
+        # Blit the temporary surface to the main window (allows for transparent shapes)
+        self.window.blit(temp_surface, (0, 0))
+
     def _highlight_square(self, x: int, y: int, colour: pygame.Color) -> None:
         """Highlight a square with the specified color."""
         board_surface = pygame.Surface((self.square_size, self.square_size), pygame.SRCALPHA)
@@ -148,25 +189,24 @@ class ChessGame:
             
     def _apply_highlighting(self, square: chess.Square, move: chess.Move, x: int, y: int) -> None:
         """Apply appropriate highlighting to squares based on game state."""    
-        # Hint highlighting has top priority
-        if self.hint_move != None and square == self.hint_move.to_square:
-            self._highlight_square(x, y, COLOURS["HINT"])
-            return
 
         # Selected piece highlighting
         if square == self.selected_piece:
-            self._highlight_square(x, y, COLOURS["HIGHLIGHT_PIECE"])
+            self._highlight_square(x, y, COLOURS["HIGHLIGHT_MOVE"])
+            self._glow_piece(square, x, y, COLOURS["HIGHLIGHT_PIECE"])
             return
         
         # Move highlighting
         if move:
-            highlight_color = COLOURS["CAPTURE"] if self.board.is_capture(move) else COLOURS["HIGHLIGHT_MOVE"]
-            self._highlight_square(x, y, highlight_color)
+            self._highlight_square(x, y, COLOURS["HIGHLIGHT_MOVE"])
+            if self.board.is_capture(move):
+                self._glow_piece(move.to_square, x, y, COLOURS["CAPTURE"])
+
             return
         
         # Check highlighting
         if self.board.is_check() and square == self.board.king(self.board.turn):
-            self._highlight_square(x, y, COLOURS["CAPTURE"])
+            self._glow_piece(square, x, y, COLOURS["CHECK"])
             return
 
         # Last move highlighting
@@ -250,6 +290,10 @@ class ChessGame:
                 offset, 
                 row * self.square_size + offset
             ))
+
+        # Hint highlighting
+        if self.hint_move != None:
+            self._draw_hint_arrow(self.hint_move.from_square, self.hint_move.to_square)
                     
     def _update_board(self) -> None:
         # Clear window and redraw the board
