@@ -17,7 +17,7 @@ COLOURS = {
     "LAST_MOVE": pygame.Color(189, 186, 83, 128),
     "CAPTURE": pygame.Color(204, 0, 0, 128),
     "CHECK": pygame.Color(204, 0, 0, 255),
-    "HINT": pygame.Color(255, 237, 41, 128),
+    "HINT": pygame.Color(74, 103, 65, 128),
     "BACKGROUND": pygame.Color(66, 69, 73),
     "TEXT": pygame.Color(255, 255, 255),
     "NOTATION_TEXT": pygame.Color(0, 0, 0),
@@ -76,7 +76,7 @@ class ChessGame:
     def _init_game_settings(self):
         """Initialize default game settings."""
         self.player_colour = chess.WHITE
-        self.difficulty = None
+        self.difficulty = 1  # Default difficulty
         self.tactic_types = list(TACTIC_TYPES.values())  # All tactic types enabled by default
         self.board = None
         self.engine = None
@@ -113,7 +113,6 @@ class ChessGame:
         """Initialize the chess board with the given FEN position."""
         self.board = chess.Board(fen)
         self.selected_piece = None
-        self.highlight_hint = False
         self.hint_move = None
     
     def _init_engine(self, difficulty: int, tactic_types: list[int]) -> None:
@@ -200,7 +199,9 @@ class ChessGame:
         if move:
             self._highlight_square(x, y, COLOURS["HIGHLIGHT_MOVE"])
             if self.board.is_capture(move):
-                self._glow_piece(move.to_square, x, y, COLOURS["CAPTURE"])
+                # Check if capture is en passant
+                if not self.board.is_en_passant(move):
+                    self._glow_piece(move.to_square, x, y, COLOURS["CAPTURE"])
 
             return
         
@@ -217,12 +218,6 @@ class ChessGame:
 
     def _draw_board(self) -> None:
         """Draw the complete chess board with pieces and highlights."""
-        # Update hint move if available
-        if self.highlight_hint and self.engine.current_tactic.moves_left() > 0:
-            self.hint_move = self.engine.current_tactic.hint_move()
-            self.selected_piece = self.hint_move.from_square
-        else:
-            self.hint_move = None
 
         # Get legal moves for selected piece
         legal_moves = {}
@@ -385,7 +380,6 @@ class ChessGame:
                     self.board.push(move)
                     self.selected_piece = None
                     self.hint_move = None
-                    self.highlight_hint = False
 
                     # Update tactic state
                     if self.engine.current_tactic:
@@ -417,7 +411,6 @@ class ChessGame:
             self.board.pop()
             self.board.pop()
             self.selected_piece = None
-            self.highlight_hint = False
             
             # Update tactic state
             if self.engine.current_tactic:
@@ -490,8 +483,9 @@ class ChessGame:
         """Handle UI button click events."""
         # Handle hint
         if event.ui_element == ui_elements["hint_button"]:
-            if self.engine.current_tactic:
-                self.highlight_hint = True
+            if self.engine.current_tactic and self.engine.current_tactic.moves_left() > 0:
+                self.hint_move = self.engine.current_tactic.hint_move()
+                self.selected_piece = self.hint_move.from_square
                 self._update_board()
         # Handle undo
         elif event.ui_element == ui_elements["undo_button"]:

@@ -67,10 +67,13 @@ class TacticsEngine:
         self.current_tactic = None
         self.tactic_types = list(TACTIC_TYPES.values())
 
+        # Search settings
+        self.max_search_depth = 20
+        self.search_limit = chess.engine.Limit(depth=12)
+        self.search_pv = 5
+        
         # Engine settings
-        self.num_pv = None
         self.engine_depth = None
-        self.max_search_depth = None
         self.bounds = {}
         self.limit = None
 
@@ -87,20 +90,17 @@ class TacticsEngine:
         if value == 0:
             self.num_pv = 5
             self.engine_depth = 8
-            self.max_search_depth = 12
-            self.bounds = {'tactic': -250, 'min_mistake': 400, 'max_mistake': -200, 'advantage': 150}
+            self.bounds = {'min_mistake': 400, 'advantage': 250}
         # Medium
         elif value == 1:
             self.num_pv = 3
             self.engine_depth = 12
-            self.max_search_depth = 8
-            self.bounds = {'tactic': -200, 'min_mistake': 300, 'max_mistake': -150, 'advantage': 150}
+            self.bounds = {'min_mistake': 300, 'advantage': 200}
         # Hard
         else:
-            self.num_pv = 1
-            self.engine_depth = 16
-            self.max_search_depth = 4
-            self.bounds = {'tactic': -200, 'min_mistake': 250, 'max_mistake': -150, 'advantage': 150}
+            self.num_pv = 2
+            self.engine_depth = 18
+            self.bounds = {'min_mistake': 250, 'advantage': 200}
         
         self.limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
 
@@ -110,25 +110,22 @@ class TacticsEngine:
     
     def only_move(self, analysis: list[dict] = None, best_score: int = None) -> chess.Move:
         """Check if there's an obvious move to play."""
-        if not analysis:
-            analysis = self.engine.analyse(self.board, self.limit, multipv=2)
-            best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
-
         current_move = analysis[0]["pv"][0]
         if len(analysis) == 1:
             return current_move
         
         second_score = analysis[1]["score"].pov(self.engine_colour).score(mate_score=100000)
 
-        # If best move is significantly better, return it
+        # If best move has minor piece advantage, return it
         if best_score >= second_score + 200:
             return current_move
         else:
             return None
     
-    def _select_normal_move(self, analysis: list[dict]) -> chess.Move:      
+    def _select_normal_move(self) -> chess.Move:
+        """Selects the least winning move based on the position evaluation."""
+        analysis = self.engine.analyse(self.board, self.limit, multipv=self.num_pv)
         current_move = analysis[0]["pv"][0]
-        """Selects the least winning based on the position evaluation."""
         for infodict in analysis[1:]:
             pv = infodict["pv"]
             score = infodict["score"].pov(self.engine_colour).score(mate_score=100000)
@@ -154,7 +151,7 @@ class TacticsEngine:
         if self.current_tactic:
             return self._select_tactic_move()
 
-        analysis = self.engine.analyse(self.board, self.limit, multipv=5)
+        analysis = self.engine.analyse(self.board, self.limit, multipv=2)
         best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
         # Checkmate line for engine
         if best_score > 5000:
@@ -172,7 +169,7 @@ class TacticsEngine:
         if self.current_tactic:
             return self.current_tactic.next_move()
 
-        return self._select_normal_move(analysis)
+        return self._select_normal_move()
     
     def undo_tactic_move(self) -> None:
         """Undo a tactic move."""
@@ -194,16 +191,15 @@ class TacticsEngine:
         for infodict in analysis:
             pv = infodict["pv"]
             score = infodict["score"].pov(self.engine_colour).score(mate_score=100000)
-            # For initial position, consider deliberate mistakes to create tactical opportunities
+            # For initial position, consider all moves above the min mistake threshold
             if depth == 0:
                 min_bound = best_score - self.bounds['min_mistake']
-                max_bound = best_score - self.bounds['max_mistake']
-                if score >= min_bound and score <= max_bound:
+                if score >= min_bound:
                     next_board = board.copy(stack=1)
                     next_board.push(pv[0])
                     search_queue.append((next_board, depth + 1, sequence + [pv[0]]))
             # Otherwise, play normal moves (slightly suboptimal moves are acceptable)
-            elif score >= best_score - 30:
+            elif score >= best_score - 50:
                 next_board = board.copy(stack=1)
                 next_board.push(pv[0])
                 search_queue.append((next_board, depth + 1, sequence + [pv[0]]))
@@ -228,8 +224,8 @@ class TacticsEngine:
             next_board.push(best_move)
 
             # Check if the move leads to a tactic
-            tactic_index, tactic_type = self._pv_tactic_check(next_board, pv[1:])
-            if tactic_index >= 0 and score <= self.bounds['tactic']:
+            tactic_index, tactic_type = self._variation_tactic_check(next_board, pv[1:])
+            if tactic_index >= 0:
                 self.current_tactic = Tactic(sequence + pv[:tactic_index + 1], score, tactic_type)
                 self.current_tactic.pretty_print()
                 return []
@@ -242,21 +238,24 @@ class TacticsEngine:
     def tactic_search(self) -> None:
         """Search for tactical opportunities in the current position."""
         initial_board = self.board.copy(stack=1)
-        search_queue = [(initial_board, 0, [])] 
+        search_queue = [(initial_board, 0, [])]
 
         while search_queue:
             board, depth, sequence = search_queue.pop(0)
             # Base case for search - max depth reached or game over
             if depth == self.max_search_depth or board.is_game_over():
+                print("Game over or max depth reached.")
                 continue
 
             # If inital position and no mistake made yet, consider more moves
             if depth == 0 and board.turn == self.engine_colour:
                 num_pv = board.legal_moves.count()
+            elif board.turn == self.engine_colour:
+                num_pv = min(board.legal_moves.count(), self.search_pv)
             else:
-                num_pv = min(board.legal_moves.count(), self.num_pv)
+                num_pv = min(board.legal_moves.count(), 2)
             
-            analysis = self.engine.analyse(board, self.limit, multipv=num_pv)
+            analysis = self.engine.analyse(board, self.search_limit, multipv=num_pv)
             best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
             # Engine getting checkmated line
             if best_score < -5000 and TACTIC_TYPES["Checkmate"] in self.tactic_types:
@@ -271,7 +270,7 @@ class TacticsEngine:
             else:
                 search_queue = self._process_player_moves(board, depth, sequence, analysis, search_queue, best_score)
 
-    def _pv_tactic_check(self, board: chess.Board, pv: list) -> tuple:
+    def _variation_tactic_check(self, board: chess.Board, pv: list) -> tuple:
         """Check if the given move sequence contains a tactical opportunity."""
         temp_board = board.copy(stack=1)
 
@@ -508,6 +507,7 @@ class TacticSearch:
 
                     # Skip if the skewer can be broken by capturing the skewer piece with a less or equal valuable piece
                     for move in board.legal_moves:
+                        # Might need something like king fork exception for skewers when the king can defend the skewered piece
                         if move.to_square == pinning_square:
                             skewering_defenders = board.attackers(board.turn, pinning_square)
                             if len(skewering_defenders) == 0:
