@@ -117,7 +117,7 @@ class TacticsEngine:
         second_score = analysis[1]["score"].pov(self.engine_colour).score(mate_score=100000)
 
         # If best move has minor piece advantage, return it
-        if best_score >= second_score + 200:
+        if best_score >= second_score + 300:
             return current_move
         else:
             return None
@@ -536,6 +536,7 @@ class TacticSearch:
             if move.to_square == forking_move.to_square:
                 return []
             
+            # Update the moved piece's square in attacked pieces
             if move.from_square in new_attacked_pieces:
                 new_attacked_pieces.remove(move.from_square)
                 new_attacked_pieces.add(move.to_square)
@@ -549,7 +550,7 @@ class TacticSearch:
                 if len(attackers) == 0:
                     continue
 
-                # If the square is still undefended, it's a good fork target
+                # If the square is undefended, it's a good fork target
                 if len(defenders) == 0:
                     new_forked.append(square)
                 else:
