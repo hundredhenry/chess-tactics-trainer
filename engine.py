@@ -88,17 +88,17 @@ class TacticsEngine:
         """Configure engine parameters based on difficulty level."""
         # Easy
         if value == 0:
-            self.num_pv = 5
+            self.num_pv = 7
             self.engine_depth = 8
-            self.bounds = {'min_mistake': 400, 'advantage': 250}
+            self.bounds = {'min_mistake': 400, 'advantage': 300}
         # Medium
         elif value == 1:
-            self.num_pv = 3
+            self.num_pv = 5
             self.engine_depth = 12
             self.bounds = {'min_mistake': 300, 'advantage': 200}
         # Hard
         else:
-            self.num_pv = 2
+            self.num_pv = 3
             self.engine_depth = 18
             self.bounds = {'min_mistake': 250, 'advantage': 200}
         
@@ -154,7 +154,7 @@ class TacticsEngine:
         analysis = self.engine.analyse(self.board, self.limit, multipv=2)
         best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
         # Checkmate line for engine
-        if best_score > 5000:
+        if best_score > 10000:
             return analysis[0]["pv"][0]
         
         # Only move available
@@ -258,7 +258,7 @@ class TacticsEngine:
             analysis = self.engine.analyse(board, self.search_limit, multipv=num_pv)
             best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
             # Engine getting checkmated line
-            if best_score < -5000 and TACTIC_TYPES["Checkmate"] in self.tactic_types:
+            if best_score < -10000 and TACTIC_TYPES["Checkmate"] in self.tactic_types:
                 self.current_tactic = Tactic(sequence + analysis[0]["pv"], best_score, TACTIC_TYPES["Checkmate"])
                 self.current_tactic.pretty_print()
                 return
