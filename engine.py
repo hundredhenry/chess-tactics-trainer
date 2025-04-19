@@ -298,7 +298,7 @@ class TacticsEngine:
                         return index, TACTIC_TYPES["Relative Pin"]
                         
                 if TACTIC_TYPES["Absolute Pin"] in self.tactic_types:
-                    pinned_pieces = TacticSearch.absolute_pin(temp_board)
+                    pinned_pieces = TacticSearch.absolute_pin(temp_board, pv[index])
                     if pinned_pieces:
                         return index, TACTIC_TYPES["Absolute Pin"]
                 
@@ -365,17 +365,16 @@ class TacticSearch:
         return None
 
     @staticmethod
-    def absolute_pin(board: chess.Board) -> list:
+    def absolute_pin(board: chess.Board, next_move: chess.Move = None) -> list:
         """Detect absolute pins (pinned to king)."""
         if not board.move_stack:
             return []
 
-        pinned_pieces = []
         # Previous position
         last_position = board.copy()
         last_position.pop()
         # Find all pieces except kings
-        filtered_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
+        filtered_pieces = board.occupied_co[board.turn] & ~board.kings
         
         # Check each piece for a pin
         for square in chess.scan_reversed(filtered_pieces):
@@ -384,27 +383,33 @@ class TacticSearch:
 
             # If the pin was not present in the last position, move is a new pin
             if pinning_square != None and last_pos_pin == None:
-                pinning_piece = board.piece_at(pinning_square)
-                is_valid_pin = True
-                
-                # Check if the pin can be broken by capturing the pinning piece
-                for move in board.legal_moves:
-                    if move.to_square == pinning_square:
-                        pinning_defenders = board.attackers(board.turn, pinning_square)
-                        if len(pinning_defenders) == 0:
-                            is_valid_pin = False
-                            break
-                        
-                       # Check if the pin can be broken by capturing the pinning piece with a less or equal valuable piece
-                        if (PIECE_VALUES[board.piece_at(move.from_square).piece_type] <= PIECE_VALUES[pinning_piece.piece_type] or
-                            board.piece_at(move.from_square).piece_type == chess.KING):
-                            is_valid_pin = False
-                            break
-                
-                if is_valid_pin:
-                    pinned_pieces.append(square)
-                    return pinned_pieces
+                pinning = board.piece_at(pinning_square)
+                pinned = board.piece_at(square)
 
+                if next_move is not None:
+                    # If pin can be broken by capturing the pinning piece, not a valid pin
+                    if next_move.to_square == pinning_square:
+                        continue
+
+                # If the pinning piece is worth less than the pinned piece, good pin
+                if PIECE_VALUES[pinning.piece_type] < PIECE_VALUES[pinned.piece_type]:
+                    return [square]
+
+                # If the pinned piece is undefended, good pin
+                if len(board.attackers(board.turn, square)) == 0:
+                    return [square]
+
+                # If the pinned piece was a crucial defender of another piece under attack, good pin
+                defending = board.attacks(square) & board.occupied_co[board.turn]
+                if len(defending) > 0:
+                    for ally in defending:
+                        if board.is_attacked_by(not board.turn, ally):
+                            attackers = board.attackers(not board.turn, ally)
+                            defenders = board.attackers(board.turn, ally)
+
+                            if len(attackers) > len(defenders) - 1:
+                                return [square]
+                            
         return []
     
     @staticmethod
