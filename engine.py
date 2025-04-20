@@ -381,9 +381,10 @@ class TacticSearch:
                 pinning = board.piece_at(pinning_square)
                 pinned = board.piece_at(square)
 
-                # If pin can be broken by capturing the pinning piece with an equal or less valuable piece, not a valid pin
+                # If pin can be broken by capturing the pinning piece, not a good pin
                 if next_move.to_square == pinning_square:
-                    if PIECE_VALUES[board.piece_at(next_move.from_square).piece_type] <= PIECE_VALUES[pinning.piece_type]:
+                    defenders = board.attackers(not board.turn, pinning_square)
+                    if len(defenders) == 0:
                         continue
 
                 # If the pinning piece is worth less than the pinned piece, good pin
@@ -405,8 +406,11 @@ class TacticSearch:
                             defenders = board.attackers(board.turn, ally)
 
                             # Do not include pinner as attacker
-                            if len(attackers) <= 1:
-                                continue
+                            if pinning_square in attackers:
+                                attackers.remove(pinning_square)
+
+                            # Do not include pinned piece as defender
+                            defenders.remove(square)
                             
                             # Pinner and pinned piece cancel eachother out
                             if len(attackers) > len(defenders):
@@ -422,21 +426,21 @@ class TacticSearch:
         # Previous position
         last_position = board.copy()
         last_position.pop()
-        # Find all pieces except kings and pawns
-        filtered_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
-
+        valued_pieces = board.occupied_co[board.turn] & ~board.kings & ~board.pawns
+        pinnable_pieces = board.occupied_co[board.turn] & ~board.kings
+        
         # Check valuable pieces that could be targets for relative pins
-        for valued_square in chess.scan_reversed(filtered_pieces):
+        for valued_square in chess.scan_reversed(valued_pieces):
             valuable = board.piece_at(valued_square)
             # Search through all potential pinned pieces for this piece
-            for pin_square in chess.scan_reversed(filtered_pieces):
+            for pin_square in chess.scan_reversed(pinnable_pieces):
                 # Skip if the piece is the same
                 if valued_square == pin_square:
                     continue
 
                 pinned = board.piece_at(pin_square)
-                # Skip if the pinned piece is worth more than the valuable piece
-                if PIECE_VALUES[pinned.piece_type] > PIECE_VALUES[valuable.piece_type]:
+                # Skip if the pinned piece is worth more than or equal to the valuable piece
+                if PIECE_VALUES[pinned.piece_type] >= PIECE_VALUES[valuable.piece_type]:
                     continue
 
                 # Check if the piece is pinned
@@ -447,14 +451,19 @@ class TacticSearch:
                 if pinning_square != None and last_pos_pin == None:
                     pinning = board.piece_at(pinning_square)
 
-                    # If pin can be broken by capturing the pinning piece with an equal or less valuable piece, not a valid pin
+                    # If pin can be broken by capturing the pinning piece, not a good pin
                     if next_move.to_square == pinning_square:
-                        if PIECE_VALUES[board.piece_at(next_move.from_square).piece_type] <= PIECE_VALUES[pinning.piece_type]:
+                        defenders = board.attackers(not board.turn, pinning_square)
+                        if len(defenders) == 0:
                             continue
 
                     # Skip if the pinning piece is worth more than or equal to valuable piece
                     if PIECE_VALUES[pinning.piece_type] >= PIECE_VALUES[valuable.piece_type]:
                         continue
+                    
+                    # Good pin if the pinned piece is worth more than the pinning piece
+                    if PIECE_VALUES[pinning.piece_type] < PIECE_VALUES[pinned.piece_type]:
+                        return [pin_square]
 
                     # Check if there are more attackers than defenders on the pinned piece
                     attackers = board.attackers(not board.turn, pin_square)
@@ -471,8 +480,11 @@ class TacticSearch:
                                 defenders = board.attackers(board.turn, ally)
 
                                 # Do not include pinner as attacker
-                                if len(attackers) <= 1:
-                                    continue
+                                if pinning_square in attackers:
+                                    attackers.remove(pinning_square)
+
+                                # Do not include pinned piece as defender
+                                defenders.remove(pin_square)
                                 
                                 # Pinner and pinned piece cancel eachother out
                                 if len(attackers) > len(defenders):
@@ -485,7 +497,6 @@ class TacticSearch:
         if not board.move_stack:
             return []
         
-        skewered_pieces = []
         # Find all pieces except pawns
         filtered_pieces = board.occupied_co[board.turn] & ~board.pawns
 
@@ -502,47 +513,30 @@ class TacticSearch:
                 if PIECE_VALUES[skewered.piece_type] > PIECE_VALUES[valued.piece_type]:
                     continue
 
-                pinning_square = TacticSearch.relative_pinner(board, board.turn, valued_square, skewered_square)
-                if pinning_square != None:
-                    pinning = board.piece_at(pinning_square)
-                    # Skip if the pinning piece is worth more than or equal to the valued piece
-                    if PIECE_VALUES[pinning.piece_type] >= PIECE_VALUES[valued.piece_type]:
+                skewering_square = TacticSearch.relative_pinner(board, board.turn, valued_square, skewered_square)
+                if skewering_square != None:
+                    skewering = board.piece_at(skewering_square)
+
+                    # Skip if the skewering piece is worth more than or equal to the valued piece
+                    if PIECE_VALUES[skewering.piece_type] >= PIECE_VALUES[valued.piece_type]:
                         continue
-
-                    # Skip if the pinning piece is worth less than the skewered piece
-                    if PIECE_VALUES[pinning.piece_type] < PIECE_VALUES[skewered.piece_type]:
-                        continue
-
-                    # Skip if the skewered piece is defended
-                    skewered_defenders = board.attackers(board.turn, skewered_square)
-                    # Do not consider if the skewered piece is defended by the valued piece
-                    if valued_square in skewered_defenders:
-                        if len(skewered_defenders) > 1:
-                            continue
-                    else:
-                        if len(skewered_defenders) > 0:
-                            continue
-
-                    is_valid_skewer = True
-
-                    # Skip if the skewer can be broken by capturing the skewer piece with a less or equal valuable piece
-                    for move in board.legal_moves:
-                        # Might need something like king fork exception for skewers when the king can defend the skewered piece
-                        if move.to_square == pinning_square:
-                            skewering_defenders = board.attackers(board.turn, pinning_square)
-                            if len(skewering_defenders) == 0:
-                                is_valid_skewer = False
-                                break
-                                
-                            if (PIECE_VALUES[board.piece_at(move.from_square).piece_type] <= PIECE_VALUES[pinning.piece_type] or
-                                board.piece_at(move.from_square).piece_type == chess.KING):
-                                is_valid_skewer = False
-                                break
                     
-                    if is_valid_skewer:
-                        skewered_pieces.append(skewered_square)
-                        return skewered_pieces
+                    # Skip if the skewering piece can be captured
+                    if next_move.to_square == skewering_square:
+                        defenders = board.attackers(not board.turn, skewered_square)
 
+                        if len(defenders) == 0:
+                            return []
+
+                    temp_board = board.copy(stack=1)
+                    temp_board.push(next_move)
+
+                    # More attackers than defenders on the skewered piece, good skewer
+                    attackers = temp_board.attackers(temp_board.turn, skewered_square)
+                    defenders = temp_board.attackers(not temp_board.turn, skewered_square)
+                    if len(attackers) > len(defenders):
+                        return [skewered_square]
+                    
         return []
 
     @staticmethod
@@ -556,7 +550,9 @@ class TacticSearch:
 
         # Check if the forking piece is captured in the next move
         if next_move.to_square == forking_move.to_square:
-            return []
+            defenders = board.attackers(not board.turn, forking_move.to_square)
+            if len(defenders) == 0:
+                return []
 
         # Generate the pieces that the forking piece is attacking
         attacked_pieces = board.attacks(forking_move.to_square) & board.occupied_co[board.turn]
