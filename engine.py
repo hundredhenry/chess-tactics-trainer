@@ -411,8 +411,7 @@ class TacticSearch:
 
                             # Do not include pinned piece as defender
                             defenders.remove(square)
-                            
-                            # Pinner and pinned piece cancel eachother out
+
                             if len(attackers) > len(defenders):
                                 return [square]
                             
@@ -461,7 +460,7 @@ class TacticSearch:
                     if PIECE_VALUES[pinning.piece_type] >= PIECE_VALUES[valuable.piece_type]:
                         continue
                     
-                    # Good pin if the pinned piece is worth more than the pinning piece
+                    # Good pin if the pinning piece is worth less than the pinned piece
                     if PIECE_VALUES[pinning.piece_type] < PIECE_VALUES[pinned.piece_type]:
                         return [pin_square]
 
@@ -486,7 +485,6 @@ class TacticSearch:
                                 # Do not include pinned piece as defender
                                 defenders.remove(pin_square)
                                 
-                                # Pinner and pinned piece cancel eachother out
                                 if len(attackers) > len(defenders):
                                     return [pin_square]
 
@@ -497,13 +495,13 @@ class TacticSearch:
         if not board.move_stack:
             return []
         
-        # Find all pieces except pawns
-        filtered_pieces = board.occupied_co[board.turn] & ~board.pawns
+        valuable_pieces = board.occupied_co[board.turn] & ~board.pawns
+        other_pieces = board.occupied_co[board.turn] & ~board.kings
 
-        for skewered_square in chess.scan_reversed(filtered_pieces):
+        for skewered_square in chess.scan_reversed(other_pieces):
             skewered = board.piece_at(skewered_square)
 
-            for valued_square in chess.scan_reversed(filtered_pieces):
+            for valued_square in chess.scan_reversed(valuable_pieces):
                 valued = board.piece_at(valued_square)
                 # Skip if the piece is the same
                 if skewered_square == valued_square:
