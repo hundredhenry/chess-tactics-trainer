@@ -382,10 +382,11 @@ class TacticSearch:
                 pinned = board.piece_at(square)
 
                 # If pin can be broken by capturing the pinning piece, not a good pin
-                if next_move.to_square == pinning_square:
-                    defenders = board.attackers(not board.turn, pinning_square)
-                    if len(defenders) == 0:
-                        continue
+                if next_move != None:
+                    if next_move.to_square == pinning_square:
+                        defenders = board.attackers(not board.turn, pinning_square)
+                        if len(defenders) == 0:
+                            continue
 
                 # If the pinning piece is worth less than the pinned piece, good pin
                 if PIECE_VALUES[pinning.piece_type] < PIECE_VALUES[pinned.piece_type]:
@@ -439,8 +440,8 @@ class TacticSearch:
                     continue
 
                 pinned = board.piece_at(pin_square)
-                # Skip if the pinned piece is worth more than or equal to the valuable piece
-                if PIECE_VALUES[pinned.piece_type] >= PIECE_VALUES[valuable.piece_type]:
+                # Skip if the pinned piece is worth more than the valuable piece
+                if PIECE_VALUES[pinned.piece_type] > PIECE_VALUES[valuable.piece_type]:
                     continue
 
                 # Check if the piece is pinned
@@ -452,10 +453,11 @@ class TacticSearch:
                     pinning = board.piece_at(pinning_square)
 
                     # If pin can be broken by capturing the pinning piece, not a good pin
-                    if next_move.to_square == pinning_square:
-                        defenders = board.attackers(not board.turn, pinning_square)
-                        if len(defenders) == 0:
-                            continue
+                    if next_move != None:
+                        if next_move.to_square == pinning_square:
+                            defenders = board.attackers(not board.turn, pinning_square)
+                            if len(defenders) == 0:
+                                continue
 
                     # Skip if the pinning piece is worth more than or equal to valuable piece
                     if PIECE_VALUES[pinning.piece_type] >= PIECE_VALUES[valuable.piece_type]:
@@ -520,13 +522,21 @@ class TacticSearch:
                     # Skip if the skewering piece is worth more than or equal to the valued piece
                     if PIECE_VALUES[skewering.piece_type] >= PIECE_VALUES[valued.piece_type]:
                         continue
-                    
-                    # Skip if the skewering piece can be captured
-                    if next_move.to_square == skewering_square:
-                        defenders = board.attackers(not board.turn, skewered_square)
 
-                        if len(defenders) == 0:
-                            return []
+                    if next_move != None:
+                        # Skip if the skewering piece can be captured
+                        if next_move.to_square == skewering_square:
+                            defenders = board.attackers(not board.turn, skewered_square)
+
+                            if len(defenders) == 0:
+                                return []
+                        
+                    # Good skewer if the skewered piece is worth more than the skewering piece
+                    if PIECE_VALUES[skewering.piece_type] < PIECE_VALUES[skewered.piece_type]:
+                        return [skewered_square]
+                    
+                    if next_move == None:
+                        return [skewered_square]
 
                     temp_board = board.copy(stack=1)
                     temp_board.push(next_move)
@@ -549,10 +559,11 @@ class TacticSearch:
         forking_move = board.peek()
 
         # Check if the forking piece is captured in the next move
-        if next_move.to_square == forking_move.to_square:
-            defenders = board.attackers(not board.turn, forking_move.to_square)
-            if len(defenders) == 0:
-                return []
+        if next_move != None:
+            if next_move.to_square == forking_move.to_square:
+                defenders = board.attackers(not board.turn, forking_move.to_square)
+                if len(defenders) == 0:
+                    return []
 
         # Generate the pieces that the forking piece is attacking
         attacked_pieces = board.attacks(forking_move.to_square) & board.occupied_co[board.turn]
@@ -586,8 +597,14 @@ class TacticSearch:
                 forked_pieces.append(square)
 
         # Not a good fork if less than two pieces are forked and no king is forked
-        if len(forked_pieces) <= 2 and not king_forked:
+        if len(forked_pieces) < 2 and not king_forked:
             return []
+        
+        if next_move == None:
+            if len(forked_pieces) < 2:
+                return []
+            
+            return forked_pieces
 
         # Check next move in sequence to ensure validity (forked pieces may move to defend eachother in best sequence)
         if next_move.from_square not in attacked_pieces:
