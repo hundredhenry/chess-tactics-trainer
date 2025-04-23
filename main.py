@@ -24,7 +24,11 @@ COLOURS = {
     "GAME_OVER_TEXT": pygame.Color(0, 0, 0)
 }
 
-ENGINE_PATH = "./engines/stockfish-windows-x86-64-bmi2.exe"
+if os.name == 'nt':
+    ENGINE_PATH = "./engines/stockfish-windows-x86-64-avx2.exe"
+elif os.name == 'posix':
+    ENGINE_PATH = "./engines/stockfish-linux"
+
 PUZZLE_PATH = "./puzzles/puzzles.csv"
 
 @dataclass

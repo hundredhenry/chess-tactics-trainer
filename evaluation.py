@@ -5,7 +5,10 @@ from engine import TacticSearch
 import csv
 import os
 
-ENGINE_PATH = "./engines/stockfish-windows-x86-64-bmi2.exe"
+if os.name == 'nt':
+    ENGINE_PATH = "./engines/stockfish-windows-x86-64-avx2.exe"
+elif os.name == 'posix':
+    ENGINE_PATH = "./engines/stockfish-linux"
 
 class EvaluationBenchmark:
     @staticmethod
@@ -44,11 +47,9 @@ class EvaluationBenchmark:
                     tactic_count += 1
                     relative_pin_count += 1
 
-                print(f"Move: {move}")
                 board.push(move)
             else:
                 result = engine.play(board, chess.engine.Limit(time=1.0, depth=6))
-                print(f"Move: {result.move}")
                 board.push(result.move)
 
                 if tactics_engine.current_tactic:
@@ -81,7 +82,7 @@ class EvaluationBenchmark:
 
         while not board.is_game_over():
             if board.turn == benchmark_colour:
-                result = benchmark_engine.play(board, chess.engine.Limit(time=1.0))
+                result = benchmark_engine.play(board, chess.engine.Limit(time=1.0, depth=20))
                 
                 if TacticSearch.fork(board, result.move):
                     tactic_count += 1
@@ -97,8 +98,7 @@ class EvaluationBenchmark:
                     relative_pin_count += 1
             else:
                 result = test_engine.play(board, chess.engine.Limit(time=1.0, depth=6))
-
-            print(f"Move: {result.move}")
+                
             board.push(result.move)
 
         benchmark_engine.quit()
@@ -119,7 +119,7 @@ class EvaluationBenchmark:
 
             difficulties = [0, 1, 2]
             colours = [chess.WHITE, chess.BLACK]
-            games_per_config = 1
+            games_per_config = 5
 
             print("Running Tactics Engine Benchmark...")
 
@@ -164,7 +164,7 @@ class EvaluationBenchmark:
 
             benchmark_skills = [1, 5, 10]  # Skill levels from 0 to 20
             colours = [chess.WHITE, chess.BLACK]
-            games_per_config = 1
+            games_per_config = 5
 
             print("Running Normal Engine Benchmark...")
 

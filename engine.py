@@ -155,17 +155,17 @@ class TacticsEngine:
         if best_score > 10000:
             return analysis[0]["pv"][0]
         
-        # Only move available
-        move = self.only_move(analysis, best_score)
-        if move:
-            return move
-        
         # Tactic search
         self.tactic_search()
 
         # Check if a tactic was found
         if self.current_tactic:
             return self.current_tactic.next_move()
+        
+        # Only move available
+        move = self.only_move(analysis, best_score)
+        if move:
+            return move
 
         return self._select_normal_move()
     
@@ -548,7 +548,7 @@ class TacticSearch:
         return []
 
     @staticmethod
-    def fork(board: chess.Board, next_move: chess.Move = None) -> list:
+    def fork(board: chess.Board, next_move: chess.Move) -> list:
         """Detect forks (attacking two or more pieces) """
         if not board.move_stack:
             return []
