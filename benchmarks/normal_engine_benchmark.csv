@@ -1,0 +1,7 @@
+Skill Level,Engine Colour,Result,Tactic Count,Total Moves,Tactics Percentage,Fork Count,Skewer Count,Absolute Pin Count,Relative Pin Count
+1,White,0-1,4,68,5.88235294117647,4,0,0,0
+1,Black,1-0,0,95,0.0,0,0,0,0
+5,White,0-1,4,170,2.3529411764705883,3,1,0,0
+5,Black,1-0,8,121,6.6115702479338845,8,0,0,0
+10,White,1/2-1/2,0,115,0.0,0,0,0,0
+10,Black,1/2-1/2,3,416,0.7211538461538461,0,0,2,1

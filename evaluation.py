@@ -2,93 +2,203 @@ import chess
 import chess.engine
 from engine import TacticsEngine
 from engine import TacticSearch
+import csv
+import os
+
+ENGINE_PATH = "./engines/stockfish-windows-x86-64-bmi2.exe"
 
 class EvaluationBenchmark:
     @staticmethod
-    def play_tactic_game(difficulty: int, engine_depth: int, benchmark_colour: bool) -> tuple:
-        tactic_count = 0
+    def play_tactic_game(difficulty: int, benchmark_colour: bool) -> tuple:
         board = chess.Board()
-        tactics_engine = TacticsEngine("./stockfish-windows-x86-64-bmi2.exe", board, benchmark_colour, False)
+
+        tactics_engine = TacticsEngine(ENGINE_PATH, board, benchmark_colour)
         tactics_engine.set_difficulty(difficulty)
-        engine = chess.engine.SimpleEngine.popen_uci("./stockfish-windows-x86-64-bmi2.exe")
-        engine.configure({"Threads": 8})
+        
+        engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
+        logical_core_count = os.cpu_count()
+        hash_size_per_core = 64  # MiB
+        max_hash_size = logical_core_count * hash_size_per_core
+        engine.configure({"Threads": logical_core_count, "Hash": max_hash_size})
+
+        tactic_count = 0
+        fork_count = 0
+        skewer_count = 0
+        absolute_pin_count = 0
+        relative_pin_count = 0
 
         while not board.is_game_over():
             if board.turn == benchmark_colour:
-                if TacticSearch.relative_pin(board) or TacticSearch.absolute_pin(board) or TacticSearch.fork(board):
-                    tactic_count += 1
-
                 move = tactics_engine.play_move()
+
+                if TacticSearch.fork(board, move):
+                    tactic_count += 1
+                    fork_count += 1
+                elif TacticSearch.skewer(board, move):
+                    tactic_count += 1
+                    skewer_count += 1
+                elif TacticSearch.absolute_pin(board, move):
+                    tactic_count += 1
+                    absolute_pin_count += 1
+                elif TacticSearch.relative_pin(board, move):   
+                    tactic_count += 1
+                    relative_pin_count += 1
+
+                print(f"Move: {move}")
                 board.push(move)
             else:
-                result = engine.play(board, chess.engine.Limit(time=10.0, depth=engine_depth))
+                result = engine.play(board, chess.engine.Limit(time=1.0, depth=6))
+                print(f"Move: {result.move}")
                 board.push(result.move)
+
                 if tactics_engine.current_tactic:
                     if tactics_engine.current_tactic.next_move() != move \
                     or tactics_engine.current_tactic.index > tactics_engine.current_tactic.max_index:
                         tactics_engine.end_tactic()
         
-        print(board.result())
         tactics_engine.close()
         engine.quit()
 
-        return tactic_count, len(board.move_stack)
+        return board.result(), tactic_count, fork_count, skewer_count, absolute_pin_count, relative_pin_count, len(board.move_stack)
 
     @staticmethod
-    def play_normal_game(benchmark_depth: int, engine_depth: int, benchmark_colour: bool) -> tuple:
-        tactic_count = 0
+    def play_normal_game(benchmark_skill: int, benchmark_colour: bool) -> tuple:
         board = chess.Board()
-        engine = chess.engine.SimpleEngine.popen_uci("./stockfish-windows-x86-64-bmi2.exe")
-        engine.configure({"Threads": 8})
+        benchmark_engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
+        logical_core_count = os.cpu_count()
+        hash_size_per_core = 64  # MiB
+        max_hash_size = logical_core_count * hash_size_per_core
+        benchmark_engine.configure({"Threads": logical_core_count, "Hash": max_hash_size, "Skill Level": benchmark_skill})
+
+        test_engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
+        test_engine.configure({"Threads": logical_core_count, "Hash": max_hash_size})
+
+        tactic_count = 0
+        fork_count = 0
+        skewer_count = 0
+        absolute_pin_count = 0
+        relative_pin_count = 0
 
         while not board.is_game_over():
             if board.turn == benchmark_colour:
-                if TacticSearch.relative_pin(board) or TacticSearch.absolute_pin(board) or TacticSearch.fork(board):
+                result = benchmark_engine.play(board, chess.engine.Limit(time=1.0))
+                
+                if TacticSearch.fork(board, result.move):
                     tactic_count += 1
-
-                result = engine.play(board, chess.engine.Limit(time=10.0, depth=benchmark_depth))
+                    fork_count += 1
+                elif TacticSearch.skewer(board, result.move):
+                    tactic_count += 1
+                    skewer_count += 1
+                elif TacticSearch.absolute_pin(board, result.move):
+                    tactic_count += 1
+                    absolute_pin_count += 1
+                elif TacticSearch.relative_pin(board, result.move):   
+                    tactic_count += 1
+                    relative_pin_count += 1
             else:
-                result = engine.play(board, chess.engine.Limit(time=10.0, depth=engine_depth))
+                result = test_engine.play(board, chess.engine.Limit(time=1.0, depth=6))
 
+            print(f"Move: {result.move}")
             board.push(result.move)
 
-        print(board.result())
-        engine.quit()
+        benchmark_engine.quit()
+        test_engine.quit()
 
-        return tactic_count, len(board.move_stack)
+        return board.result(), tactic_count, fork_count, skewer_count, absolute_pin_count, relative_pin_count, len(board.move_stack)
+    
+    @staticmethod
+    def run_tactics_engine_benchmark():
+        os.makedirs("benchmarks", exist_ok=True)
+
+        csv_file = "benchmarks/tactics_engine_benchmark.csv"
+        fieldnames = ["Difficulty", "Engine Colour", "Result", "Tactic Count", "Total Moves", "Tactics Percentage", "Fork Count", "Skewer Count", "Absolute Pin Count", "Relative Pin Count"]
+
+        with open(csv_file, mode="w", newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            writer.writeheader()
+
+            difficulties = [0, 1, 2]
+            colours = [chess.WHITE, chess.BLACK]
+            games_per_config = 1
+
+            print("Running Tactics Engine Benchmark...")
+
+            for difficulty in difficulties:
+                difficulty_name = ["Easy", "Medium", "Hard"][difficulty]
+                print(f"Testing Difficulty: {difficulty_name}")
+
+                for colour in colours:
+                    colour_name = "White" if colour == chess.WHITE else "Black"
+                    print(f"Testing Engine Colour: {colour_name}")
+
+                    for game_num in range(1, games_per_config + 1):
+                        print(f"Game {game_num} of {games_per_config}...")
+
+                        result, tactic_count, fork_count, skewer_count, absolute_pin_count, relative_pin_count, total_moves = EvaluationBenchmark.play_tactic_game(difficulty, colour)
+                        tactics_percentage = (tactic_count / total_moves) * 100 if total_moves > 0 else 0
+                        writer.writerow({
+                            "Difficulty": difficulty_name,
+                            "Engine Colour": colour_name,
+                            "Result": result,
+                            "Tactic Count": tactic_count,
+                            "Total Moves": total_moves,
+                            "Tactics Percentage": tactics_percentage,
+                            "Fork Count": fork_count,
+                            "Skewer Count": skewer_count,
+                            "Absolute Pin Count": absolute_pin_count,
+                            "Relative Pin Count": relative_pin_count
+                        })
+
+        print("Tactics Engine Benchmark completed!")
+
+    @staticmethod
+    def run_normal_engine_benchmark():
+        os.makedirs("benchmarks", exist_ok=True)
+
+        csv_file = "benchmarks/normal_engine_benchmark.csv"
+        fieldnames = ["Skill Level", "Engine Colour", "Result", "Tactic Count", "Total Moves", "Tactics Percentage", "Fork Count", "Skewer Count", "Absolute Pin Count", "Relative Pin Count"]
+
+        with open(csv_file, mode="w", newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            writer.writeheader()
+
+            benchmark_skills = [1, 5, 10]  # Skill levels from 0 to 20
+            colours = [chess.WHITE, chess.BLACK]
+            games_per_config = 1
+
+            print("Running Normal Engine Benchmark...")
+
+            for skill in benchmark_skills:
+                print(f"Testing Skill Level: {skill}")
+
+                for colour in colours:
+                    colour_name = "White" if colour == chess.WHITE else "Black"
+                    print(f"Testing Engine Colour: {colour_name}")
+
+                    for game_num in range(1, games_per_config + 1):
+                        print(f"Game {game_num} of {games_per_config}...")
+
+                        result, tactic_count, fork_count, skewer_count, absolute_pin_count, relative_pin_count, total_moves = EvaluationBenchmark.play_normal_game(skill, colour)
+                        tactics_percentage = (tactic_count / total_moves) * 100 if total_moves > 0 else 0
+                        writer.writerow({
+                            "Skill Level": skill,
+                            "Engine Colour": colour_name,
+                            "Result": result,
+                            "Tactic Count": tactic_count,
+                            "Total Moves": total_moves,
+                            "Tactics Percentage": tactics_percentage,
+                            "Fork Count": fork_count,
+                            "Skewer Count": skewer_count,
+                            "Absolute Pin Count": absolute_pin_count,
+                            "Relative Pin Count": relative_pin_count
+                        })
+
+        print("Normal Engine Benchmark completed!")                        
 
 if __name__ == "__main__":
-    evaluation = EvaluationBenchmark()
-    difficulties = [0, 1, 2]
-    benchmark_depths = [6, 10, 14]
-    engine_depths = [6, 8, 10, 12, 14, 16, 18]
-    benchmark_colours = [True, False]
-    cumultative_tactic_count1 = 0
-    cumultative_move_count1 = 0
-    cumultative_tactic_count2 = 0
-    cumultative_move_count2 = 0
+    # Run the benchmarks
+    EvaluationBenchmark.run_normal_engine_benchmark()
+    EvaluationBenchmark.run_tactics_engine_benchmark()
 
-    for benchmark_colour in benchmark_colours:
-        for benchmark_depth in benchmark_depths:
-            for engine_depth in engine_depths:
-                print(benchmark_depth, engine_depth, benchmark_colour)
-                tactic_count, move_count = evaluation.play_normal_game(benchmark_depth, engine_depth, benchmark_colour)
-                print(f"Tactic Count: {tactic_count}")
-                print(f"Tactic Proportion: {(tactic_count / move_count) * 100}%\n")
-                cumultative_tactic_count1 += tactic_count
-                cumultative_move_count1 += move_count
+    print("All benchmarks completed!")
 
-    for benchmark_colour in benchmark_colours:
-        for difficulty in difficulties:
-            for engine_depth in engine_depths:
-                print(difficulty, engine_depth, benchmark_colour)
-                tactic_count, move_count = evaluation.play_tactic_game(difficulty, engine_depth, benchmark_colour)
-                print(f"Tactic Count: {tactic_count}")
-                print(f"Tactic Proportion: {(tactic_count / move_count) * 100}%\n")
-                cumultative_tactic_count2 += tactic_count
-                cumultative_move_count2 += move_count
-
-    score1 = (cumultative_tactic_count1 / cumultative_move_count1) * 100
-    score2 = (cumultative_tactic_count2 / cumultative_move_count2) * 100
-    print(f"Percentage of Tactics (Benchmark): {score1}%") 
-    print(f"Percentage of Tactics (Tactic Engine): {score2}%")
