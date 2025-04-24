@@ -49,7 +49,7 @@ class EvaluationBenchmark:
 
                 board.push(move)
             else:
-                result = engine.play(board, chess.engine.Limit(time=1.0, depth=6))
+                result = engine.play(board, chess.engine.Limit(time=1.0, depth=10))
                 board.push(result.move)
 
                 if tactics_engine.current_tactic:
@@ -82,7 +82,7 @@ class EvaluationBenchmark:
 
         while not board.is_game_over():
             if board.turn == benchmark_colour:
-                result = benchmark_engine.play(board, chess.engine.Limit(time=1.0, depth=20))
+                result = benchmark_engine.play(board, chess.engine.Limit(depth=18))
                 
                 if TacticSearch.fork(board, result.move):
                     tactic_count += 1
@@ -97,7 +97,7 @@ class EvaluationBenchmark:
                     tactic_count += 1
                     relative_pin_count += 1
             else:
-                result = test_engine.play(board, chess.engine.Limit(time=1.0, depth=6))
+                result = test_engine.play(board, chess.engine.Limit(depth=10))
                 
             board.push(result.move)
 

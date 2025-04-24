@@ -224,7 +224,11 @@ class TacticsEngine:
             next_board.push(best_move)
 
             # Check if the move leads to a tactic
-            tactic_type = self._position_tactic_check(next_board, pv[1])
+            if len(analysis) == 1:
+                tactic_type = self._position_tactic_check(next_board, None)
+            else:
+                tactic_type = self._position_tactic_check(next_board, pv[1])
+                
             if tactic_type >= 0:
                 self.current_tactic = Tactic(sequence + [best_move], score, tactic_type)
                 self.current_tactic.pretty_print()
