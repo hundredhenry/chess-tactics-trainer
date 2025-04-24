@@ -25,7 +25,7 @@ class EvaluationBenchmark:
         tactics_engine.set_difficulty(difficulty)
         
         engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
-        engine.configure({"Threads": logical_core_count, "Hash": max_hash_size})
+        engine.configure({"Threads": logical_core_count, "Hash": max_hash_size, "Skill Level": 20})
 
         tactic_count = 0
         fork_count = 0
@@ -72,7 +72,7 @@ class EvaluationBenchmark:
         benchmark_engine.configure({"Threads": logical_core_count, "Hash": max_hash_size, "Skill Level": benchmark_skill})
 
         test_engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
-        test_engine.configure({"Threads": logical_core_count, "Hash": max_hash_size})
+        test_engine.configure({"Threads": logical_core_count, "Hash": max_hash_size, "Skill Level": 20})
 
         tactic_count = 0
         fork_count = 0

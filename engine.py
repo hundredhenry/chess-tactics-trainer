@@ -125,7 +125,7 @@ class TacticsEngine:
             return None
     
     def _select_normal_move(self) -> chess.Move:
-        """Selects the least winning move based on the position evaluation."""
+        """Selects the least losing move based on the position evaluation."""
         analysis = self.engine.analyse(self.board, self.normal_move_limit, multipv=self.num_pv)
         for infodict in analysis:
             pv = infodict["pv"]
@@ -164,7 +164,6 @@ class TacticsEngine:
         
         # Tactic search
         self.tactic_search()
-
         # Check if a tactic was found
         if self.current_tactic:
             return self.current_tactic.next_move()
@@ -262,10 +261,11 @@ class TacticsEngine:
             analysis = self.engine.analyse(board, self.search_limit, multipv=num_pv)
             best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
             # Engine getting checkmated line
-            if best_score < -10000 and TACTIC_TYPES["Checkmate"] in self.tactic_types:
-                self.current_tactic = Tactic(sequence + analysis[0]["pv"], best_score, TACTIC_TYPES["Checkmate"])
-                self.current_tactic.pretty_print()
-                return
+            if depth == 0:
+                if best_score < -10000 and TACTIC_TYPES["Checkmate"] in self.tactic_types:
+                    self.current_tactic = Tactic(sequence + analysis[0]["pv"], best_score, TACTIC_TYPES["Checkmate"])
+                    self.current_tactic.pretty_print()
+                    return
 
             # Engine turn
             if board.turn == self.engine_colour:
