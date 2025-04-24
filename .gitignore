@@ -164,9 +164,8 @@ cython_debug/
 # Virtual environment
 .venv/
 
-# Sunfish files
-*.log
-*.txt
+# Sbatch files
+*.out
 *.err
 
 # Tuning
@@ -176,3 +175,4 @@ model.pkl
 # Test files
 cute.sh
 out.pgn
+
