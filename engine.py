@@ -90,17 +90,17 @@ class TacticsEngine:
         if value == 0:
             self.num_pv = 7
             self.engine_depth = 8
-            self.bounds = {'min_mistake': 500, 'advantage': 300}
+            self.bounds = {'min_bound': -600, 'advantage': 300}
         # Medium
         elif value == 1:
             self.num_pv = 5
             self.engine_depth = 12
-            self.bounds = {'min_mistake': 350, 'advantage': 200}
+            self.bounds = {'min_bound': -350, 'advantage': 200}
         # Hard
         else:
             self.num_pv = 3
             self.engine_depth = 18
-            self.bounds = {'min_mistake': 250, 'advantage': 200}
+            self.bounds = {'min_bound': -300, 'advantage': 200}
         
         self.limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
 
@@ -189,10 +189,10 @@ class TacticsEngine:
         for infodict in analysis:
             pv = infodict["pv"]
             score = infodict["score"].pov(self.engine_colour).score(mate_score=100000)
+
             # For initial position, consider all moves above the min mistake threshold
             if depth == 0:
-                min_bound = best_score - self.bounds['min_mistake']
-                if score >= min_bound:
+                if score >= self.bounds['min_bound']:
                     next_board = board.copy(stack=1)
                     next_board.push(pv[0])
                     search_queue.append((next_board, depth + 1, sequence + [pv[0]]))
@@ -207,6 +207,7 @@ class TacticsEngine:
     def _process_player_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_queue: list, best_score: int) -> list:
         """Process player moves in the search stack."""
         best_move_clear = False
+        
         if len(analysis) == 1:
             best_move_clear = best_score <= -self.bounds['advantage']
         elif len(analysis) >= 2:
@@ -222,9 +223,9 @@ class TacticsEngine:
             next_board.push(best_move)
 
             # Check if the move leads to a tactic
-            tactic_index, tactic_type = self._variation_tactic_check(next_board, pv[1:])
-            if tactic_index >= 0:
-                self.current_tactic = Tactic(sequence + pv[:tactic_index + 1], score, tactic_type)
+            tactic_type = self._position_tactic_check(next_board, pv[1])
+            if tactic_type >= 0:
+                self.current_tactic = Tactic(sequence + [best_move], score, tactic_type)
                 self.current_tactic.pretty_print()
                 return []
             else:
@@ -268,39 +269,31 @@ class TacticsEngine:
             else:
                 search_queue = self._process_player_moves(board, depth, sequence, analysis, search_queue, best_score)
 
-    def _variation_tactic_check(self, board: chess.Board, pv: list) -> tuple:
+    def _position_tactic_check(self, board: chess.Board, engine_move: chess.Move) -> tuple:
         """Check if the given move sequence contains a tactical opportunity."""
-        temp_board = board.copy(stack=1)
+       
+        if TACTIC_TYPES["Fork"] in self.tactic_types:
+            forked_pieces = TacticSearch.fork(board, engine_move)
 
-        for index, move in enumerate(pv):
-            # Only check for tactics on the engine's turn
-            if temp_board.turn == self.engine_colour:
-                # Check for each type of tactic
-                if TACTIC_TYPES["Fork"] in self.tactic_types:
-                    forked_pieces = TacticSearch.fork(temp_board, pv[index])
-
-                    if forked_pieces:
-                        return index, TACTIC_TYPES["Fork"]
-                    
-                if TACTIC_TYPES["Skewer"] in self.tactic_types:
-                    skewered_pieces = TacticSearch.skewer(temp_board, pv[index])
-                    if skewered_pieces:
-                        return index, TACTIC_TYPES["Skewer"]
-                    
-                if TACTIC_TYPES["Absolute Pin"] in self.tactic_types:
-                    pinned_pieces = TacticSearch.absolute_pin(temp_board, pv[index])
-                    if pinned_pieces:
-                        return index, TACTIC_TYPES["Absolute Pin"]
-                    
-                if TACTIC_TYPES["Relative Pin"] in self.tactic_types:
-                    relative_pins = TacticSearch.relative_pin(temp_board, pv[index])
-                    if relative_pins:
-                        return index, TACTIC_TYPES["Relative Pin"]
-                
-            # Apply the move and continue
-            temp_board.push(move)
-
-        return -1, -1
+            if forked_pieces:
+                return TACTIC_TYPES["Fork"]
+        
+        if TACTIC_TYPES["Skewer"] in self.tactic_types:
+            skewered_pieces = TacticSearch.skewer(board, engine_move)
+            if skewered_pieces:
+                return TACTIC_TYPES["Skewer"]
+            
+        if TACTIC_TYPES["Absolute Pin"] in self.tactic_types:
+            pinned_pieces = TacticSearch.absolute_pin(board, engine_move)
+            if pinned_pieces:
+                return TACTIC_TYPES["Absolute Pin"]
+        
+        if TACTIC_TYPES["Relative Pin"] in self.tactic_types:
+            relative_pins = TacticSearch.relative_pin(board, engine_move)
+            if relative_pins:
+                return TACTIC_TYPES["Relative Pin"]
+        
+        return -1
     
     def reset_engine(self, board: chess.Board, engine_colour: chess.Color) -> None:
         """Reset the engine with a new board and colour."""
