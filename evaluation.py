@@ -10,6 +10,12 @@ if os.name == 'nt':
 elif os.name == 'posix':
     ENGINE_PATH = "./engines/stockfish-linux"
 
+logical_core_count = os.cpu_count()
+hash_size_per_core = 64  # MiB
+max_hash_size = logical_core_count * hash_size_per_core
+print(f"Logical Core Count: {logical_core_count}")
+print(f"Max Hash Size: {max_hash_size} MiB")
+
 class EvaluationBenchmark:
     @staticmethod
     def play_tactic_game(difficulty: int, benchmark_colour: bool) -> tuple:
@@ -19,9 +25,6 @@ class EvaluationBenchmark:
         tactics_engine.set_difficulty(difficulty)
         
         engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
-        logical_core_count = os.cpu_count()
-        hash_size_per_core = 64  # MiB
-        max_hash_size = logical_core_count * hash_size_per_core
         engine.configure({"Threads": logical_core_count, "Hash": max_hash_size})
 
         tactic_count = 0
@@ -49,7 +52,7 @@ class EvaluationBenchmark:
 
                 board.push(move)
             else:
-                result = engine.play(board, chess.engine.Limit(time=1.0, depth=10))
+                result = engine.play(board, chess.engine.Limit(depth=10))
                 board.push(result.move)
 
                 if tactics_engine.current_tactic:
@@ -66,9 +69,6 @@ class EvaluationBenchmark:
     def play_normal_game(benchmark_skill: int, benchmark_colour: bool) -> tuple:
         board = chess.Board()
         benchmark_engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
-        logical_core_count = os.cpu_count()
-        hash_size_per_core = 64  # MiB
-        max_hash_size = logical_core_count * hash_size_per_core
         benchmark_engine.configure({"Threads": logical_core_count, "Hash": max_hash_size, "Skill Level": benchmark_skill})
 
         test_engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
