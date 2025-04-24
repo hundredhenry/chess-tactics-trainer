@@ -71,11 +71,13 @@ class TacticsEngine:
         self.max_search_depth = 20
         self.search_limit = chess.engine.Limit(depth=14)
         self.search_pv = 5
+        self.err_bound = 50
+        self.only_move_bound = 300
         
         # Engine settings
         self.engine_depth = None
         self.bounds = {}
-        self.limit = None
+        self.normal_move_limit = None
 
     def optimum_engine_settings(self) -> None:
         """Set the engine settings to optimum values depending on the system."""
@@ -90,19 +92,19 @@ class TacticsEngine:
         if value == 0:
             self.num_pv = 7
             self.engine_depth = 8
-            self.bounds = {'min_bound': -600, 'advantage': 300}
+            self.bounds = {'min_bound': -600, 'forcing_bound': 300}
         # Medium
         elif value == 1:
             self.num_pv = 5
             self.engine_depth = 12
-            self.bounds = {'min_bound': -350, 'advantage': 200}
+            self.bounds = {'min_bound': -350, 'forcing_bound': 200}
         # Hard
         else:
             self.num_pv = 3
             self.engine_depth = 18
-            self.bounds = {'min_bound': -300, 'advantage': 200}
+            self.bounds = {'min_bound': -300, 'forcing_bound': 200}
         
-        self.limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
+        self.normal_move_limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
 
     def set_tactic_types(self, types: list[int]) -> None:
         """Set the types of tactics to search for."""
@@ -117,14 +119,14 @@ class TacticsEngine:
         second_score = analysis[1]["score"].pov(self.engine_colour).score(mate_score=100000)
 
         # If best move has minor piece advantage, return it
-        if best_score >= second_score + 300:
+        if best_score >= second_score + self.only_move_bound:
             return current_move
         else:
             return None
     
     def _select_normal_move(self) -> chess.Move:
         """Selects the least winning move based on the position evaluation."""
-        analysis = self.engine.analyse(self.board, self.limit, multipv=self.num_pv)
+        analysis = self.engine.analyse(self.board, self.normal_move_limit, multipv=self.num_pv)
         for infodict in analysis:
             pv = infodict["pv"]
             current_move = pv[0]
@@ -149,7 +151,7 @@ class TacticsEngine:
         if self.current_tactic:
             return self._select_tactic_move()
 
-        analysis = self.engine.analyse(self.board, self.limit, multipv=2)
+        analysis = self.engine.analyse(self.board, self.normal_move_limit, multipv=2)
         best_score = analysis[0]["score"].pov(self.engine_colour).score(mate_score=100000)
         # Checkmate line for engine
         if best_score > 10000:
@@ -197,7 +199,7 @@ class TacticsEngine:
                     next_board.push(pv[0])
                     search_queue.append((next_board, depth + 1, sequence + [pv[0]]))
             # Otherwise, play normal moves (slightly suboptimal moves are acceptable)
-            elif score >= best_score - 50:
+            elif score >= best_score - self.err_bound:
                 next_board = board.copy(stack=1)
                 next_board.push(pv[0])
                 search_queue.append((next_board, depth + 1, sequence + [pv[0]]))
@@ -207,12 +209,11 @@ class TacticsEngine:
     def _process_player_moves(self, board: chess.Board, depth: int, sequence: list, analysis: list[dict], search_queue: list, best_score: int) -> list:
         """Process player moves in the search stack."""
         best_move_clear = False
-        
         if len(analysis) == 1:
-            best_move_clear = best_score <= -self.bounds['advantage']
+            best_move_clear = best_score <= -self.bounds['forcing_bound']
         elif len(analysis) >= 2:
             second_score = analysis[1]["score"].pov(self.engine_colour).score(mate_score=100000)
-            best_move_clear = best_score <= second_score - self.bounds['advantage']
+            best_move_clear = best_score <= second_score - self.bounds['forcing_bound']
 
         # If there's a clear best move, check for tactics
         if best_move_clear:
