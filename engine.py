@@ -97,7 +97,7 @@ class TacticsEngine:
         elif value == 1:
             self.num_pv = 5
             self.engine_depth = 12
-            self.bounds = {'min_bound': -350, 'forcing_bound': 200}
+            self.bounds = {'min_bound': -300, 'forcing_bound': 200}
         # Hard
         else:
             self.num_pv = 3

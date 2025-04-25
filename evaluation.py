@@ -52,7 +52,7 @@ class EvaluationBenchmark:
 
                 board.push(move)
             else:
-                result = engine.play(board, chess.engine.Limit(depth=10))
+                result = engine.play(board, chess.engine.Limit(depth=20))
                 board.push(result.move)
 
                 if tactics_engine.current_tactic:
@@ -97,7 +97,7 @@ class EvaluationBenchmark:
                     tactic_count += 1
                     relative_pin_count += 1
             else:
-                result = test_engine.play(board, chess.engine.Limit(depth=10))
+                result = test_engine.play(board, chess.engine.Limit(depth=20))
                 
             board.push(result.move)
 
