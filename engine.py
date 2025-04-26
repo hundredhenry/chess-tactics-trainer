@@ -92,17 +92,17 @@ class TacticsEngine:
         if value == 0:
             self.num_pv = 7
             self.engine_depth = 8
-            self.bounds = {'min_bound': -600, 'forcing_bound': 300}
+            self.bounds = {'min_bound': 500, 'forcing_bound': 300}
         # Medium
         elif value == 1:
             self.num_pv = 5
             self.engine_depth = 12
-            self.bounds = {'min_bound': -300, 'forcing_bound': 200}
+            self.bounds = {'min_bound': 350, 'forcing_bound': 200}
         # Hard
         else:
             self.num_pv = 3
             self.engine_depth = 18
-            self.bounds = {'min_bound': -300, 'forcing_bound': 200}
+            self.bounds = {'min_bound': 250, 'forcing_bound': 200}
         
         self.normal_move_limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
 
@@ -193,7 +193,8 @@ class TacticsEngine:
 
             # For initial position, consider all moves above the min mistake threshold
             if depth == 0:
-                if score >= self.bounds['min_bound']:
+                minimum_bound = best_score - self.bounds['min_bound']
+                if score >= minimum_bound:
                     next_board = board.copy(stack=1)
                     next_board.push(pv[0])
                     search_queue.append((next_board, depth + 1, sequence + [pv[0]]))
