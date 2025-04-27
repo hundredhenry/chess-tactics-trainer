@@ -226,7 +226,7 @@ class TacticsEngine:
             # Check if the move leads to a tactic
             if len(analysis) == 1:
                 tactic_type = self._position_tactic_check(next_board, None)
-            else:
+            elif len(analysis) >= 2:
                 tactic_type = self._position_tactic_check(next_board, pv[1])
                 
             if tactic_type >= 0:
