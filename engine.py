@@ -92,7 +92,7 @@ class TacticsEngine:
         if value == 0:
             self.num_pv = 7
             self.engine_depth = 8
-            self.bounds = {'min_bound': 500, 'forcing_bound': 300}
+            self.bounds = {'min_bound': 500, 'forcing_bound': 250} # 300
         # Medium
         elif value == 1:
             self.num_pv = 5
@@ -102,7 +102,7 @@ class TacticsEngine:
         else:
             self.num_pv = 3
             self.engine_depth = 18
-            self.bounds = {'min_bound': 250, 'forcing_bound': 200}
+            self.bounds = {'min_bound': 250, 'forcing_bound': 150} # 200
         
         self.normal_move_limit = chess.engine.Limit(time=10.0, depth=self.engine_depth)
 
@@ -224,9 +224,9 @@ class TacticsEngine:
             next_board.push(best_move)
 
             # Check if the move leads to a tactic
-            if len(analysis) == 1:
+            if len(pv) == 1:
                 tactic_type = self._position_tactic_check(next_board, None)
-            elif len(analysis) >= 2:
+            elif len(pv) >= 2:
                 tactic_type = self._position_tactic_check(next_board, pv[1])
                 
             if tactic_type >= 0:
