@@ -1,4 +1,4 @@
-# cs310-project
+# chess-tactics-trainer
 
 A chess tactics training application, integrating Stockfish to create an opponent which generates tactics from the current position.
 
